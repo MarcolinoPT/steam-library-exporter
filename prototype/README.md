@@ -61,6 +61,10 @@ The prototype inspects the currently rendered page DOM in place. It extracts pos
 
 The page may render only part of the library at a time. The result therefore includes both Steam's displayed count and the number of unique AppIDs extracted from the current DOM. If those counts differ, treat the page comparison as partial rather than assuming the profile page has been fully read. The page's visible list is a third reference set, not a canonical entitlement source.
 
+## Store AppIDs absent from profile page
+
+After a successful profile comparison, the popup can classify the Store AppIDs not present in the current profile Games page. The action refreshes the authenticated Store source and re-reads the existing profile page DOM in the same selected Firefox container, then selects Store AppIDs absent from the profile set. It checks public `/api/appdetails/` metadata one AppID per request, paced at least two seconds apart, using the in-memory incremental classifier. For the observed account this set was 233 entries, so a complete run may take roughly eight minutes. The popup must remain open. Only aggregate type and failure counts are displayed. No tabs are opened, scrolled, reloaded, or navigated. Public metadata is not proof of account entitlement, and unavailable records remain unknown.
+
 ## Profile-only AppID metadata probe
 
 After a successful profile Games page comparison identifies AppIDs absent from both authenticated library endpoints, the popup offers a separate metadata probe for that profile-only set.
