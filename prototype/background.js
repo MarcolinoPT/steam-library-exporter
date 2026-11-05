@@ -169,16 +169,40 @@ async function getCommunitySessionId() {
 }
 
 async function getSafeCookieDiagnostics() {
-  const cookieNames = ["sessionid", "steamLoginSecure", "steamLogin", "steamRememberLogin"];
-  const [community, store] = await Promise.all([
-    Promise.all(cookieNames.map((name) => hasCookie(COMMUNITY_ENDPOINT, name))),
-    Promise.all(cookieNames.map((name) => hasCookie(STORE_ENDPOINT, name)))
-  ]);
+  let cookieStores;
+  try {
+    cookieStores = await browser.cookies.getAllCookieStores();
+  } catch {
+    return { error: "Firefox could not enumerate cookie stores." };
+  }
 
-  return {
-    community: Object.fromEntries(cookieNames.map((name, index) => [name, community[index]])),
-    store: Object.fromEntries(cookieNames.map((name, index) => [name, store[index]]))
-  };
+  const stores = [];
+  for (const cookieStore of cookieStores) {
+    const [communityCookies, storeCookies] = await Promise.all([
+      browser.cookies.getAll({ domain: "steamcommunity.com", storeId: cookieStore.id }),
+      browser.cookies.getAll({ domain: "steampowered.com", storeId: cookieStore.id })
+    ]);
+
+    const summarize = (cookies) => ({
+      count: cookies.length,
+      cookies: cookies.map((cookie) => ({
+        name: cookie.name,
+        domain: cookie.domain,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        session: cookie.session
+      })).sort((a, b) => a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name))
+    });
+
+    stores.push({
+      storeId: cookieStore.id,
+      tabCount: cookieStore.tabIds.length,
+      community: summarize(communityCookies),
+      store: summarize(storeCookies)
+    });
+  }
+
+  return { stores };
 }
 
 async function fetchCommunitySource() {
