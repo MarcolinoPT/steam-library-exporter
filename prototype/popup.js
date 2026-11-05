@@ -76,6 +76,23 @@ compareButton.addEventListener("click", async () => {
     }
 
     metricsElement.replaceChildren();
+
+    if (result.cookieDiagnostics) {
+      const cookieHeading = document.createElement("h3");
+      cookieHeading.textContent = "Steam cookie presence (values never read into the popup)";
+      metricsElement.append(cookieHeading);
+
+      const cookieDetail = document.createElement("p");
+      const diagnostics = result.cookieDiagnostics;
+      cookieDetail.textContent =
+        "Community: sessionid " + (diagnostics.communitySessionIdPresent ? "present" : "absent") +
+        "; steamLoginSecure " + (diagnostics.communityLoginCookiePresent ? "present" : "absent") +
+        ". Store: sessionid " + (diagnostics.storeSessionIdPresent ? "present" : "absent") +
+        "; steamLoginSecure " + (diagnostics.storeLoginCookiePresent ? "present" : "absent") + ".";
+      cookieDetail.className = "diagnostic";
+      metricsElement.append(cookieDetail);
+    }
+
     appendSourceStatus("Steam Community", result.community);
     appendSourceStatus("Steam Store", result.store);
 
