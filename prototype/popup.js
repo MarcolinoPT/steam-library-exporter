@@ -15,18 +15,38 @@ const METRIC_LABELS = {
   storeInvalidEntryCount: "Invalid Store entries"
 };
 
-function renderMetrics(metrics) {
-  metricsElement.replaceChildren();
+function appendSourceStatus(sourceName, sourceResult) {
+  const heading = document.createElement("h3");
+  heading.textContent = sourceName;
+  metricsElement.append(heading);
 
+  const detail = document.createElement("p");
+  if (sourceResult.ok) {
+    detail.textContent =
+      sourceResult.rawEntryCount + " raw entries; " +
+      sourceResult.uniqueAppCount + " unique AppIDs; " +
+      sourceResult.invalidEntryCount + " invalid entries.";
+  } else {
+    detail.textContent = sourceResult.error;
+    detail.className = "error";
+  }
+  metricsElement.append(detail);
+}
+
+function appendComparisonMetrics(metrics) {
+  const heading = document.createElement("h3");
+  heading.textContent = "AppID comparison";
+  metricsElement.append(heading);
+
+  const definitionList = document.createElement("dl");
   for (const [key, label] of Object.entries(METRIC_LABELS)) {
     const term = document.createElement("dt");
     const value = document.createElement("dd");
     term.textContent = label;
     value.textContent = String(metrics[key]);
-    metricsElement.append(term, value);
+    definitionList.append(term, value);
   }
-
-  resultsElement.hidden = false;
+  metricsElement.append(definitionList);
 }
 
 compareButton.addEventListener("click", async () => {
@@ -41,11 +61,22 @@ compareButton.addEventListener("click", async () => {
     });
 
     if (!result || !result.ok) {
-      throw new Error(result?.error || "The comparison could not be completed.");
+      throw new Error("The comparison could not be completed.");
     }
 
-    renderMetrics(result.metrics);
-    statusElement.textContent = "Both endpoint responses were parsed.";
+    metricsElement.replaceChildren();
+    appendSourceStatus("Steam Community", result.community);
+    appendSourceStatus("Steam Store", result.store);
+
+    if (result.metrics) {
+      appendComparisonMetrics(result.metrics);
+      statusElement.textContent = "Both endpoint responses were parsed.";
+    } else {
+      statusElement.textContent =
+        "At least one source could not be queried; see its diagnostic above.";
+    }
+
+    resultsElement.hidden = false;
   } catch (error) {
     errorElement.textContent = error instanceof Error
       ? error.message
