@@ -24,6 +24,18 @@
         open until the run finishes. AppIDs and application names are never
         displayed.
       </p>
+      <button id="profile-compare-button" type="button">
+        Compare profile Games page (All Games)
+      </button>
+      <p id="profile-compare-note" class="notice">
+        Reads AppIDs from an already-open Steam Community profile Games page
+        in the selected container and compares aggregate overlap with the
+        authenticated endpoints. The page is not navigated or modified.
+      </p>
+      <section id="profile-comparison" hidden aria-label="Profile Games page comparison">
+        <h2>Profile Games page comparison</h2>
+        <div id="profile-comparison-results"></div>
+      </section>
       <button id="package-probe-button" type="button" hidden>
         Probe owned package sample (10)
       </button>
