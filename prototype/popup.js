@@ -79,7 +79,7 @@ compareButton.addEventListener("click", async () => {
 
     if (result.cookieDiagnostics) {
       const cookieHeading = document.createElement("h3");
-      cookieHeading.textContent = "Steam cookie presence (values never read into the popup)";
+      cookieHeading.textContent = "Steam cookie presence (values never exposed to the popup)";
       metricsElement.append(cookieHeading);
 
       const cookieDetail = document.createElement("p");
