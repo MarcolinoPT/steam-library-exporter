@@ -169,19 +169,15 @@ async function getCommunitySessionId() {
 }
 
 async function getSafeCookieDiagnostics() {
-  const [communitySessionIdPresent, communityLoginCookiePresent, storeSessionIdPresent, storeLoginCookiePresent] =
-    await Promise.all([
-      hasCookie(COMMUNITY_ENDPOINT, "sessionid"),
-      hasCookie(COMMUNITY_ENDPOINT, "steamLoginSecure"),
-      hasCookie(STORE_ENDPOINT, "sessionid"),
-      hasCookie(STORE_ENDPOINT, "steamLoginSecure")
-    ]);
+  const cookieNames = ["sessionid", "steamLoginSecure", "steamLogin", "steamRememberLogin"];
+  const [community, store] = await Promise.all([
+    Promise.all(cookieNames.map((name) => hasCookie(COMMUNITY_ENDPOINT, name))),
+    Promise.all(cookieNames.map((name) => hasCookie(STORE_ENDPOINT, name)))
+  ]);
 
   return {
-    communitySessionIdPresent,
-    communityLoginCookiePresent,
-    storeSessionIdPresent,
-    storeLoginCookiePresent
+    community: Object.fromEntries(cookieNames.map((name, index) => [name, community[index]])),
+    store: Object.fromEntries(cookieNames.map((name, index) => [name, store[index]]))
   };
 }
 
