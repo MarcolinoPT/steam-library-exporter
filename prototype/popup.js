@@ -2,6 +2,7 @@ const compareButton = document.querySelector("#compare-button");
 const classifyButton = document.querySelector("#classify-button");
 const classifyNote = document.querySelector("#classify-note");
 const profileCompareButton = document.querySelector("#profile-compare-button");
+const confirmOwnProfileInput = document.querySelector("#confirm-own-profile");
 const classifyProfileOnlyButton = document.querySelector("#classify-profile-only-button");
 const classifyStoreNotProfileButton = document.querySelector("#classify-store-not-profile-button");
 const classifyStoreNotProfileNote = document.querySelector("#classify-store-not-profile-note");
@@ -33,6 +34,16 @@ const METRIC_LABELS = {
   communityInvalidEntryCount: "Invalid Community entries",
   storeInvalidEntryCount: "Invalid Store entries"
 };
+
+function syncProfileActionAvailability() {
+  const confirmed = confirmOwnProfileInput.checked;
+  profileCompareButton.disabled = !confirmed;
+  classifyProfileOnlyButton.disabled = !confirmed;
+  classifyStoreNotProfileButton.disabled = !confirmed;
+}
+
+confirmOwnProfileInput.addEventListener("change", syncProfileActionAvailability);
+syncProfileActionAvailability();
 
 function appendDefinitionList(container, values) {
   const definitionList = document.createElement("dl");
@@ -218,7 +229,8 @@ classifyStoreNotProfileButton.addEventListener("click", async () => {
   statusElement.textContent = "Refreshing sources and preparing Store AppIDs absent from the profile…";
   try {
     const started = await browser.runtime.sendMessage({
-      type: "START_STORE_NOT_PROFILE_CLASSIFICATION"
+      type: "START_STORE_NOT_PROFILE_CLASSIFICATION",
+      confirmedOwnProfile: confirmOwnProfileInput.checked
     });
     if (!started || !started.ok) {
       throw new Error(started?.error || "Store-not-profile classification could not be started.");
@@ -265,8 +277,7 @@ classifyStoreNotProfileButton.addEventListener("click", async () => {
     statusElement.textContent = "Store-not-profile classification failed.";
   } finally {
     classifyStoreNotProfileButton.disabled = false;
-    profileCompareButton.disabled = false;
-    classifyProfileOnlyButton.disabled = false;
+    syncProfileActionAvailability();
   }
 });
 
@@ -278,7 +289,8 @@ classifyProfileOnlyButton.addEventListener("click", async () => {
   statusElement.textContent = "Refreshing the three sources and starting metadata checks for profile-only AppIDs…";
   try {
     const started = await browser.runtime.sendMessage({
-      type: "START_PROFILE_ONLY_CLASSIFICATION"
+      type: "START_PROFILE_ONLY_CLASSIFICATION",
+      confirmedOwnProfile: confirmOwnProfileInput.checked
     });
     if (!started || !started.ok) {
       throw new Error(started?.error || "Profile-only metadata checks could not be started.");
@@ -325,7 +337,7 @@ classifyProfileOnlyButton.addEventListener("click", async () => {
     statusElement.textContent = "Profile-only classification failed.";
   } finally {
     classifyProfileOnlyButton.disabled = false;
-    profileCompareButton.disabled = false;
+    syncProfileActionAvailability();
   }
 });
 
@@ -339,7 +351,8 @@ profileCompareButton.addEventListener("click", async () => {
   statusElement.textContent = "Reading the existing profile Games page and refreshing authenticated sources…";
   try {
     const result = await browser.runtime.sendMessage({
-      type: "COMPARE_VISIBLE_PROFILE_GAMES"
+      type: "COMPARE_VISIBLE_PROFILE_GAMES",
+      confirmedOwnProfile: confirmOwnProfileInput.checked
     });
     if (!result || !result.ok) {
       throw new Error(result?.error || "The profile page comparison could not be completed.");
@@ -351,7 +364,7 @@ profileCompareButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Profile page comparison failed.";
   } finally {
-    profileCompareButton.disabled = false;
+    syncProfileActionAvailability();
     compareButton.disabled = false;
     classifyButton.disabled = false;
     packageProbeButton.disabled = false;
