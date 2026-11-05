@@ -57,7 +57,7 @@ Reference for the observed appdetails behavior and rate limit: [InternalSteamWeb
 
 After a successful comparison with an `rgOwnedPackages` array, the popup offers **Probe owned package sample (10)**.
 
-The probe refreshes both authenticated library sources from the existing same-container tabs, derives the Store-only AppID set in memory, and samples up to 10 unique package IDs. The sample is evenly spaced across the package list returned by Steam rather than taking only the first entries. It sends one unauthenticated public request to `/api/packagedetails/` with the sampled IDs as a comma-separated `packageids` parameter and `credentials: "omit"`.
+The probe refreshes both authenticated library sources from the existing same-container tabs, derives the Store-only AppID set in memory, and samples up to 10 unique package IDs. The sample is evenly spaced across the package list returned by Steam rather than taking only the first entries. It sends one unauthenticated public `/api/packagedetails/` request per sampled package ID, sequentially, with a two-second delay between requests and `credentials: "omit"`. It stops at the first network, HTTP, content-type, or JSON-shape failure and reports only the completed request count and failing request position.
 
 The response is inspected in memory. Only aggregate metrics are returned: package counts, whether package app lists were available, app relationship counts, unique AppID count, invalid entry counts, and how many sampled AppIDs overlap the Store-only set. Package IDs, AppIDs, package names, app names, and raw response data are never returned to the popup, logged, or persisted.
 
