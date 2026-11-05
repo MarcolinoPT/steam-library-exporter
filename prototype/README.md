@@ -61,6 +61,14 @@ The prototype inspects the currently rendered page DOM in place. It extracts pos
 
 The page may render only part of the library at a time. The result therefore includes both Steam's displayed count and the number of unique AppIDs extracted from the current DOM. If those counts differ, treat the page comparison as partial rather than assuming the profile page has been fully read. The page's visible list is a third reference set, not a canonical entitlement source.
 
+## Profile-only AppID metadata probe
+
+After a successful profile Games page comparison identifies AppIDs absent from both authenticated library endpoints, the popup offers a separate metadata probe for that profile-only set.
+
+The probe refreshes the two authenticated endpoints and extracts AppIDs from the already-open profile Games page again. It selects only IDs absent from both endpoint sets, then queries public Store `/api/appdetails/` metadata one AppID per request, with at least two seconds between requests. It reuses the incremental in-memory classification job and returns aggregate Steam-reported type counts and unresolved/failure counts only.
+
+The profile page and both Steam source tabs must remain open in the same authenticated container. No tab is opened, reloaded, scrolled, or navigated. AppIDs, names and response bodies are not shown, logged or persisted. Public appdetails metadata is not an entitlement check; unavailable entries remain unknown.
+
 ## Owned-package relationship probe
 
 After a successful comparison with an `rgOwnedPackages` array, the popup offers **Probe owned package sample (10)**.
