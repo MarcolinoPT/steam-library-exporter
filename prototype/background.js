@@ -566,145 +566,119 @@ async function classifyStoreOnlyApps() {
     };
   }
 
-  let injectionResults;
-  try {
-    injectionResults = await browser.scripting.executeScript({
-      target: { tabId: storeTab.id },
-      func: async (appIds) => {
-        const typeCounts = new Map();
-        let attemptedCount = 0;
-        let resolvedCount = 0;
-        let unavailableCount = 0;
-        let missingTypeCount = 0;
-        let identityMismatchCount = 0;
-        let requestFailureCount = 0;
-        let rateLimited = false;
-        let stopReason = null;
+  const typeCounts = new Map();
+  let attemptedCount = 0;
+  let resolvedCount = 0;
+  let unavailableCount = 0;
+  let missingTypeCount = 0;
+  let identityMismatchCount = 0;
+  let requestFailureCount = 0;
+  let rateLimited = false;
+  let stopReason = null;
 
-        const wait = (milliseconds) =>
-          new Promise((resolve) => setTimeout(resolve, milliseconds));
+  const wait = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-        for (const appId of appIds) {
-          if (attemptedCount > 0) {
-            await wait(2000);
-          }
+  for (const appId of storeOnlyAppIds) {
+    if (attemptedCount > 0) {
+      await wait(2000);
+    }
 
-          const url = new URL(
-            "https://store.steampowered.com/api/appdetails/"
-          );
-          url.searchParams.set("appids", String(appId));
-          url.searchParams.set("l", "english");
+    const url = new URL(
+      "https://store.steampowered.com/api/appdetails/"
+    );
+    url.searchParams.set("appids", String(appId));
+    url.searchParams.set("l", "english");
 
-          attemptedCount += 1;
-          let response;
-          try {
-            response = await fetch(url.toString(), {
-              method: "GET",
-              credentials: "omit",
-              cache: "no-store",
-              redirect: "follow"
-            });
-          } catch {
-            requestFailureCount += 1;
-            stopReason = "network-error";
-            break;
-          }
+    attemptedCount += 1;
+    let response;
+    try {
+      // This endpoint is public. Fetch from the extension context with
+      // credentials omitted; no Steam tab or login cookies are involved.
+      response = await fetch(url.toString(), {
+        method: "GET",
+        credentials: "omit",
+        cache: "no-store",
+        redirect: "follow"
+      });
+    } catch {
+      requestFailureCount += 1;
+      stopReason = "network-error";
+      break;
+    }
 
-          if (response.status === 429) {
-            rateLimited = true;
-            requestFailureCount += 1;
-            stopReason = "rate-limited";
-            break;
-          }
+    if (response.status === 429) {
+      rateLimited = true;
+      requestFailureCount += 1;
+      stopReason = "rate-limited";
+      break;
+    }
 
-          if (!response.ok || response.redirected) {
-            requestFailureCount += 1;
-            stopReason = "http-error";
-            break;
-          }
+    if (!response.ok || response.redirected) {
+      requestFailureCount += 1;
+      stopReason = "http-error";
+      break;
+    }
 
-          const contentType = response.headers.get("content-type") || "";
-          if (!contentType.toLowerCase().includes("application/json")) {
-            requestFailureCount += 1;
-            stopReason = "unexpected-content-type";
-            break;
-          }
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      requestFailureCount += 1;
+      stopReason = "unexpected-content-type";
+      break;
+    }
 
-          let payload;
-          try {
-            payload = await response.json();
-          } catch {
-            requestFailureCount += 1;
-            stopReason = "malformed-json";
-            break;
-          }
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      requestFailureCount += 1;
+      stopReason = "malformed-json";
+      break;
+    }
 
-          const entry = payload && typeof payload === "object"
-            ? payload[String(appId)]
-            : null;
+    const entry = payload && typeof payload === "object"
+      ? payload[String(appId)]
+      : null;
 
-          if (!entry || entry.success !== true || !entry.data) {
-            unavailableCount += 1;
-            continue;
-          }
+    if (!entry || entry.success !== true || !entry.data) {
+      unavailableCount += 1;
+      continue;
+    }
 
-          if (
-            entry.data.steam_appid !== undefined &&
-            Number(entry.data.steam_appid) !== appId
-          ) {
-            identityMismatchCount += 1;
-            continue;
-          }
+    if (
+      entry.data.steam_appid !== undefined &&
+      Number(entry.data.steam_appid) !== appId
+    ) {
+      identityMismatchCount += 1;
+      continue;
+    }
 
-          if (
-            typeof entry.data.type !== "string" ||
-            entry.data.type.trim().length === 0
-          ) {
-            missingTypeCount += 1;
-            continue;
-          }
+    if (
+      typeof entry.data.type !== "string" ||
+      entry.data.type.trim().length === 0
+    ) {
+      missingTypeCount += 1;
+      continue;
+    }
 
-          const type = entry.data.type.trim().toLowerCase().slice(0, 64);
-          typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
-          resolvedCount += 1;
-        }
-
-        return {
-          requestedCount: appIds.length,
-          attemptedCount,
-          resolvedCount,
-          typeCounts,
-          unavailableCount,
-          missingTypeCount,
-          identityMismatchCount,
-          requestFailureCount,
-          rateLimited,
-          stopReason,
-          notAttemptedCount: appIds.length - attemptedCount
-        };
-      },
-      args: [storeOnlyAppIds]
-    });
-  } catch {
-    return {
-      ok: false,
-      error: "Firefox could not run the metadata requests in the existing Steam Store tab."
-    };
-  }
-
-  const mainFrameResult = injectionResults.find(
-    (result) => result.frameId === 0
-  );
-  if (!mainFrameResult || mainFrameResult.error || !mainFrameResult.result) {
-    return {
-      ok: false,
-      error: "Firefox could not complete the metadata classification in the existing Steam Store tab."
-    };
+    const type = entry.data.type.trim().toLowerCase().slice(0, 64);
+    typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+    resolvedCount += 1;
   }
 
   return {
     ok: true,
-    ...mainFrameResult.result
+    requestedCount: storeOnlyAppIds.length,
+    attemptedCount,
+    resolvedCount,
+    typeCounts: Object.fromEntries(typeCounts),
+    unavailableCount,
+    missingTypeCount,
+    identityMismatchCount,
+    requestFailureCount,
+    rateLimited,
+    stopReason,
+    notAttemptedCount: storeOnlyAppIds.length - attemptedCount
   };
 }
 
