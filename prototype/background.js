@@ -702,9 +702,17 @@ async function classifyStoreOnlyApps() {
 }
 
 browser.runtime.onMessage.addListener((message) => {
-  if (!message || message.type !== "COMPARE_SOURCES") {
+  if (!message) {
     return undefined;
   }
 
-  return compareSources();
+  if (message.type === "COMPARE_SOURCES") {
+    return compareSources();
+  }
+
+  if (message.type === "CLASSIFY_STORE_ONLY") {
+    return classifyStoreOnlyApps();
+  }
+
+  return undefined;
 });
