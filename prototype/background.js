@@ -694,6 +694,248 @@ async function pollStoreOnlyClassification(jobId) {
   return getClassificationProgress(job);
 }
 
+
+function extractPackageId(entry) {
+  if (typeof entry === "number" && Number.isSafeInteger(entry) && entry > 0) {
+    return entry;
+  }
+  if (typeof entry === "string" && /^\\d+$/.test(entry)) {
+    const value = Number(entry);
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+    const candidate = entry.packageid ?? entry.packageId ?? entry.subid ??
+      entry.subId ?? entry.id;
+    if (typeof candidate === "number" && Number.isSafeInteger(candidate) &&
+        candidate > 0) {
+      return candidate;
+    }
+    if (typeof candidate === "string" && /^\\d+$/.test(candidate)) {
+      const value = Number(candidate);
+      return Number.isSafeInteger(value) && value > 0 ? value : null;
+    }
+  }
+  return null;
+}
+
+function selectEvenlySpacedSample(values, sampleSize) {
+  if (values.length <= sampleSize) {
+    return values;
+  }
+  const selected = [];
+  const seen = new Set();
+  for (let index = 0; index < sampleSize; index += 1) {
+    const sourceIndex = Math.floor(index * (values.length - 1) /
+      (sampleSize - 1));
+    const value = values[sourceIndex];
+    if (!seen.has(value)) {
+      seen.add(value);
+      selected.push(value);
+    }
+  }
+  return selected;
+}
+
+async function probeOwnedPackageSample() {
+  const cookieDiagnostics = await getSafeCookieDiagnostics();
+  let selected;
+  try {
+    selected = await chooseAuthenticatedStore(cookieDiagnostics);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error
+        ? error.message
+        : "Could not select an authenticated Firefox container."
+    };
+  }
+
+  const communityTab = findExistingSteamTab(
+    selected.tabs, selected.storeId, "steamcommunity.com"
+  );
+  const storeTab = findExistingSteamTab(
+    selected.tabs, selected.storeId, "store.steampowered.com"
+  );
+  if (!communityTab || !storeTab) {
+    return {
+      ok: false,
+      error: "Both Steam Community and Steam Store tabs must already be open in the selected authenticated container. No tabs were opened or changed."
+    };
+  }
+
+  let communityPayload;
+  let storePayload;
+  try {
+    const sessionId = await getCommunitySessionId(selected.storeId);
+    [communityPayload, storePayload] = await Promise.all([
+      executeSteamRequest(communityTab.id, COMMUNITY_ENDPOINT, sessionId),
+      executeSteamRequest(storeTab.id, STORE_ENDPOINT)
+    ]);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error
+        ? error.message
+        : "Could not refresh the authenticated Steam sources."
+    };
+  }
+
+  if (!Array.isArray(communityPayload) ||
+      !storePayload || typeof storePayload !== "object" ||
+      Array.isArray(storePayload) ||
+      !Array.isArray(storePayload.rgOwnedApps) ||
+      !Array.isArray(storePayload.rgOwnedPackages)) {
+    return {
+      ok: false,
+      error: "Steam returned an unexpected library response shape or did not include rgOwnedPackages."
+    };
+  }
+
+  let community;
+  let store;
+  try {
+    community = normalizeAppIds(communityPayload);
+    store = normalizeAppIds(storePayload.rgOwnedApps);
+  } catch {
+    return {
+      ok: false,
+      error: "Could not normalize the refreshed Steam library entries."
+    };
+  }
+
+  const storeOnlyAppIds = new Set(
+    [...store.appIds].filter((appId) => !community.appIds.has(appId))
+  );
+  const packageIds = [...new Set(
+    storePayload.rgOwnedPackages.map(extractPackageId).filter(
+      (packageId) => packageId !== null
+    )
+  )];
+  const invalidPackageEntryCount =
+    storePayload.rgOwnedPackages.length -
+    storePayload.rgOwnedPackages.filter(
+      (entry) => extractPackageId(entry) !== null
+    ).length;
+  const sample = selectEvenlySpacedSample(packageIds, 10);
+
+  if (sample.length === 0) {
+    return {
+      ok: false,
+      error: "Steam Store returned no valid package IDs to sample."
+    };
+  }
+
+  const url = new URL("https://store.steampowered.com/api/packagedetails/");
+  url.searchParams.set("packageids", sample.join(","));
+  url.searchParams.set("l", "english");
+
+  let response;
+  try {
+    response = await fetch(url.toString(), {
+      method: "GET",
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "follow"
+    });
+  } catch {
+    return { ok: false, error: "The public package-details request failed at the network layer." };
+  }
+
+  if (response.status === 429) {
+    return { ok: false, error: "Steam rate-limited the package-details sample (HTTP 429)." };
+  }
+  if (!response.ok || response.redirected) {
+    return {
+      ok: false,
+      error: "Steam package-details request failed (HTTP " +
+        response.status + (response.redirected ? ", redirected" : "") + ")."
+    };
+  }
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return { ok: false, error: "Steam package-details returned a non-JSON response." };
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, error: "Steam package-details returned malformed JSON." };
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { ok: false, error: "Steam package-details returned an unexpected JSON shape." };
+  }
+
+  let resolvedPackageCount = 0;
+  let unavailablePackageCount = 0;
+  let packagesWithAppsCount = 0;
+  let packagesWithoutAppsCount = 0;
+  let invalidAppEntryCount = 0;
+  let appRelationshipCount = 0;
+  const uniqueAppIds = new Set();
+  const sampledAppIds = new Set();
+
+  for (const packageId of sample) {
+    const entry = payload[String(packageId)];
+    if (!entry || entry.success !== true || !entry.data ||
+        typeof entry.data !== "object") {
+      unavailablePackageCount += 1;
+      continue;
+    }
+
+    resolvedPackageCount += 1;
+    if (!Array.isArray(entry.data.apps)) {
+      unavailablePackageCount += 1;
+      resolvedPackageCount -= 1;
+      continue;
+    }
+
+    const packageApps = new Set();
+    for (const app of entry.data.apps) {
+      const appId = extractAppId(app);
+      if (appId === null || !isPositiveAppId(appId)) {
+        invalidAppEntryCount += 1;
+        continue;
+      }
+      packageApps.add(appId);
+      uniqueAppIds.add(appId);
+      sampledAppIds.add(appId);
+      appRelationshipCount += 1;
+    }
+    if (packageApps.size > 0) {
+      packagesWithAppsCount += 1;
+    } else {
+      packagesWithoutAppsCount += 1;
+    }
+  }
+
+  let storeOnlyAppIdsMatchedCount = 0;
+  for (const appId of sampledAppIds) {
+    if (storeOnlyAppIds.has(appId)) {
+      storeOnlyAppIdsMatchedCount += 1;
+    }
+  }
+
+  return {
+    ok: true,
+    sampleMethod: "evenly-spaced across the unique owned-package list",
+    ownedPackageEntryCount: storePayload.rgOwnedPackages.length,
+    uniqueValidPackageCount: packageIds.length,
+    invalidPackageEntryCount,
+    sampledPackageCount: sample.length,
+    resolvedPackageCount,
+    unavailablePackageCount,
+    packagesWithAppsCount,
+    packagesWithoutAppsCount,
+    invalidAppEntryCount,
+    appRelationshipCount,
+    uniqueAppCount: uniqueAppIds.size,
+    storeOnlyAppIdsMatchedCount,
+    storeOnlyAppIdsUnmatchedCount: storeOnlyAppIds.size -
+      storeOnlyAppIdsMatchedCount
+  };
+}
+
 browser.runtime.onMessage.addListener((message) => {
   if (!message) {
     return undefined;
@@ -709,6 +951,10 @@ browser.runtime.onMessage.addListener((message) => {
 
   if (message.type === "POLL_CLASSIFICATION") {
     return pollStoreOnlyClassification(message.jobId);
+  }
+
+  if (message.type === "PROBE_PACKAGE_SAMPLE") {
+    return probeOwnedPackageSample();
   }
 
   return undefined;
