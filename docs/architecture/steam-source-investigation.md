@@ -119,6 +119,26 @@ The successful run validates the incremental message/polling flow for this accou
 
 Reference: [InternalSteamWebAPI — Get App Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-App-Details).
 
+## Owned-package relationship probe
+
+A separate prototype action now tests the public Store package-details endpoint against a small sample of the account's `rgOwnedPackages` entries.
+
+The probe:
+- Refreshes Community and Store library responses from the existing authenticated tabs in the selected Firefox container.
+- Computes the Store-only AppID set in memory.
+- Extracts valid package IDs from `rgOwnedPackages`, deduplicates them, and chooses up to 10 evenly spaced entries from the returned order.
+- Sends one unauthenticated request to `/api/packagedetails/` using the sampled package IDs in the `packageids` query parameter.
+- Inspects only response success state and the `data.apps[].id` relationships.
+- Returns aggregate counts only, including sample AppID overlap with the Store-only set. No package IDs, AppIDs, names, or raw metadata are returned or persisted.
+
+The package-details endpoint is undocumented by Valve. Community-maintained documentation describes a CSV `packageids` parameter and an `apps` array in each successful package response. This is sufficient to justify a limited probe, not to assume that the endpoint is stable or complete.
+
+**Interpretation guardrail:** a package's catalog app list describes what the package contains; it does not prove that every listed app is individually entitled to the account. A 10-package sample can indicate whether this mapping is useful, but cannot establish coverage of all 329 owned packages or explain all 46 Store-only AppIDs.
+
+**Status:** implementation added; awaiting user runtime validation.
+
+Reference: [InternalSteamWebAPI — Get Package Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-Package-Details).
+
 ## Open questions
 
 1. Does the metadata endpoint return a usable type for all 46 Store-only AppIDs?
