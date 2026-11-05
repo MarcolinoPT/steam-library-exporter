@@ -168,20 +168,15 @@ async function fetchStoreSource() {
   return normalizeAppIds(payload.rgOwnedApps);
 }
 
-browser.runtime.onMessage.addListener(async (message) => {
-  if (!message || message.type !== "COMPARE_SOURCES") {
-    return undefined;
-  }
-
+async function captureSource(fetchSource) {
   try {
-    const [community, store] = await Promise.all([
-      fetchCommunitySource(),
-      fetchStoreSource()
-    ]);
-
+    const source = await fetchSource();
     return {
       ok: true,
-      metrics: compareAppIds(community, store)
+      rawEntryCount: source.rawEntryCount,
+      uniqueAppCount: source.uniqueAppCount,
+      invalidEntryCount: source.invalidEntryCount,
+      appIds: source.appIds
     };
   } catch (error) {
     return {
@@ -191,4 +186,38 @@ browser.runtime.onMessage.addListener(async (message) => {
         : "An unexpected error occurred."
     };
   }
+}
+
+browser.runtime.onMessage.addListener(async (message) => {
+  if (!message || message.type !== "COMPARE_SOURCES") {
+    return undefined;
+  }
+
+  const [community, store] = await Promise.all([
+    captureSource(fetchCommunitySource),
+    captureSource(fetchStoreSource)
+  ]);
+
+  return {
+    ok: true,
+    community: community.ok
+      ? {
+          ok: true,
+          rawEntryCount: community.rawEntryCount,
+          uniqueAppCount: community.uniqueAppCount,
+          invalidEntryCount: community.invalidEntryCount
+        }
+      : community,
+    store: store.ok
+      ? {
+          ok: true,
+          rawEntryCount: store.rawEntryCount,
+          uniqueAppCount: store.uniqueAppCount,
+          invalidEntryCount: store.invalidEntryCount
+        }
+      : store,
+    metrics: community.ok && store.ok
+      ? compareAppIds(community, store)
+      : null
+  };
 });
