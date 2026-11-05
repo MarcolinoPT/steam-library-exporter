@@ -137,6 +137,15 @@ async function fetchJsonEndpoint(endpoint, sourceName) {
   return payload;
 }
 
+async function hasCookie(url, name) {
+  try {
+    const cookie = await browser.cookies.get({ url, name });
+    return Boolean(cookie && typeof cookie.value === "string" && cookie.value.length > 0);
+  } catch {
+    return false;
+  }
+}
+
 async function getCommunitySessionId() {
   let cookie;
   try {
@@ -157,6 +166,23 @@ async function getCommunitySessionId() {
   }
 
   return cookie.value;
+}
+
+async function getSafeCookieDiagnostics() {
+  const [communitySessionIdPresent, communityLoginCookiePresent, storeSessionIdPresent, storeLoginCookiePresent] =
+    await Promise.all([
+      hasCookie(COMMUNITY_ENDPOINT, "sessionid"),
+      hasCookie(COMMUNITY_ENDPOINT, "steamLoginSecure"),
+      hasCookie(STORE_ENDPOINT, "sessionid"),
+      hasCookie(STORE_ENDPOINT, "steamLoginSecure")
+    ]);
+
+  return {
+    communitySessionIdPresent,
+    communityLoginCookiePresent,
+    storeSessionIdPresent,
+    storeLoginCookiePresent
+  };
 }
 
 async function fetchCommunitySource() {
@@ -230,13 +256,15 @@ browser.runtime.onMessage.addListener(async (message) => {
     return undefined;
   }
 
-  const [community, store] = await Promise.all([
+  const [community, store, cookieDiagnostics] = await Promise.all([
     captureSource(fetchCommunitySource),
-    captureSource(fetchStoreSource)
+    captureSource(fetchStoreSource),
+    getSafeCookieDiagnostics()
   ]);
 
   return {
     ok: true,
+    cookieDiagnostics,
     community: community.ok
       ? {
           ok: true,
