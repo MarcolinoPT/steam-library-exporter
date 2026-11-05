@@ -1,6 +1,6 @@
 # Temporary Firefox MV3 source comparator
 
-This prototype tests authenticated requests from a privileged extension background context. It is intentionally separate from the production application.
+This prototype tests whether the authenticated Steam library endpoints can be queried from the Firefox container that already holds the user's Steam session. It is intentionally separate from the production application.
 
 ## Load in Firefox
 
@@ -9,26 +9,39 @@ This prototype tests authenticated requests from a privileged extension backgrou
 3. Choose `prototype/manifest.json` from this repository checkout.
 4. Open the extension popup and select **Compare my Steam sources**.
 
-Use a Firefox profile where you are already signed in to both Steam Community and Steam Store. Do not change Steam profile privacy settings for this test.
+Use a Firefox profile where you are already signed in to both Steam Community and Steam Store in the same Firefox container. Do not change Steam profile privacy settings for this test.
 
-## Permissions
+Both Steam sites must already have an open tab in that container. The prototype will not open, reload, activate, navigate, or otherwise modify tabs.
+
+## Permissions and scope
 
 The prototype requests:
 
-- `cookies` permission, used only to read the `sessionid` cookie for `steamcommunity.com`.
+- `cookies`: inspect Steam cookie metadata across Firefox cookie stores and read the Community `sessionid` for the selected store. Cookie values are not included in diagnostics.
+- `scripting`: execute the two one-off endpoint requests in existing Steam tabs.
 - Host access only for `https://steamcommunity.com/*` and `https://store.steampowered.com/*`.
 
-It does not request broad URL access, tabs, storage, or content-script permissions. Requests run in the Firefox MV3 background context with `credentials: "include"`.
+It deliberately does **not** request:
 
-The Community session ID is retrieved in memory and added only to the Community endpoint request. It is never returned to the popup, logged, persisted, or sent to the Store endpoint or any third party. If the cookie is unavailable, the Community request fails with a generic diagnostic.
+- `tabs`: host permissions provide access to the URL metadata of matching Steam tabs; the prototype queries tabs without a URL filter and filters the returned Steam URLs locally.
+- `contextualIdentities`: it reads the existing tab `cookieStoreId` and cookie-store metadata, but does not manage or name containers.
+- `storage`, `<all_urls>`, or any unrelated host access.
+
+The background script identifies cookie stores that have Steam's `steamLoginSecure` cookie for both Community and Store. If more than one store qualifies, the active Steam tab determines the intended store; if there is no unambiguous selection, the prototype stops and explains what to do. It then finds existing Community and Store tabs in that same store.
+
+The Firefox MV3 background context cannot select an arbitrary container's cookie store for a normal `fetch()`. Therefore, the prototype uses `scripting.executeScript()` to run each request in a matching existing Steam-origin tab. The browser attaches that tab's own container cookies to the same-origin request. This is a one-off injection, not a persistent content script.
+
+The Community `sessionid` is read for the selected cookie store and passed in memory to the Community request only. It is never returned to the popup, logged, persisted, sent to Steam Store, or sent to a third party. The Steam response bodies are returned to the extension background only for in-memory normalization and comparison.
 
 ## Data handling
 
-- Response bodies and the session ID are handled in memory only.
+- Response bodies and session material are handled in memory only.
 - AppIDs are normalized to positive safe integers.
-- Only aggregate counts, non-sensitive Store response-shape metadata (top-level keys and owned-package count), and boolean cookie-presence diagnostics are returned to the popup. Cookie values are never exposed to the popup.
-- Raw records, cookies, and session material are never logged or persisted.
+- Only aggregate counts, non-sensitive Store response-shape metadata (top-level keys and owned-package count), cookie metadata (never cookie values), and a selected store identifier are returned to the popup.
+- Raw AppID entries, response bodies, cookie values, and session material are never logged or persisted.
 - No requests are sent to any destination other than the two Steam origins.
+- The extension does not create, reload, activate, navigate, or close tabs.
+- The prototype does not change Steam account or profile settings.
 
 ## Interpretation
 
