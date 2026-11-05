@@ -280,6 +280,7 @@ function appendPackageProbe(result) {
     ["Invalid package entries", result.invalidPackageEntryCount],
     ["Sample selection", result.sampleMethod],
     ["Packages sampled", result.sampledPackageCount],
+    ["Individual requests completed", result.completedPackageRequestCount],
     ["Packages resolved with app lists", result.resolvedPackageCount],
     ["Packages unavailable / without app list", result.unavailablePackageCount],
     ["Packages with at least one app", result.packagesWithAppsCount],
@@ -306,7 +307,7 @@ packageProbeButton.addEventListener("click", async () => {
   errorElement.hidden = true;
   packageProbeElement.hidden = true;
   statusElement.textContent =
-    "Refreshing authenticated sources and checking a sample of owned packages…";
+    "Refreshing authenticated sources and checking up to 10 packages individually…";
 
   try {
     const result = await browser.runtime.sendMessage({
