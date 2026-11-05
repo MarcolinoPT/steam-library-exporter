@@ -11,7 +11,7 @@ This prototype tests whether the authenticated Steam library endpoints can be qu
 
 Use a Firefox profile where you are already signed in to both Steam Community and Steam Store in the same Firefox container. Do not change Steam profile privacy settings for this test.
 
-Both Steam sites must already have an open tab in that container. The prototype will not open, reload, activate, navigate, or otherwise modify tabs.
+**Both Steam sites must already have an open tab in the selected authenticated container.** A Community tab in the default container cannot be used for a request in another container, even if it is signed in. The prototype will not open, reload, activate, navigate, or otherwise modify tabs. If either matching tab is missing, that source reports a diagnostic and is not queried.
 
 ## Permissions and scope
 
@@ -42,6 +42,28 @@ The Community `sessionid` is read for the selected cookie store and passed in me
 - No requests are sent to any destination other than the two Steam origins.
 - The extension does not create, reload, activate, navigate, or close tabs.
 - The prototype does not change Steam account or profile settings.
+
+## Runtime validation (2026-11-05)
+
+The existing-tab approach was tested successfully in Firefox using `firefox-container-4`, where both Steam login cookie sets were present and both matching Steam tabs were open.
+
+| Metric | Steam Community | Steam Store |
+|---|---:|---:|
+| Raw entries | 499 | 545 |
+| Unique AppIDs | 499 | 545 |
+| Invalid entries | 0 | 0 |
+
+Comparison:
+
+- Present in both: 499
+- Community only: 0
+- Store only: 46
+- Combined unique AppIDs: 545
+- Store owned packages: 329
+
+The user also tested the Community tab in the default container; that did not work for this selected container. This confirms the practical requirement that **both origin tabs must be open in the same authenticated Firefox container**. The extension does not move or recreate tabs to satisfy this requirement.
+
+This is a successful reproduction of the earlier manual counts, not proof that either endpoint is complete or that every AppID represents a game. The experiment does not select a canonical source.
 
 ## Interpretation
 
