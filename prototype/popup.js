@@ -26,6 +26,17 @@ function appendSourceStatus(sourceName, sourceResult) {
       sourceResult.rawEntryCount + " raw entries; " +
       sourceResult.uniqueAppCount + " unique AppIDs; " +
       sourceResult.invalidEntryCount + " invalid entries.";
+
+    if (sourceResult.responseKeys) {
+      const metadata = document.createElement("p");
+      metadata.textContent =
+        "Response keys: " + sourceResult.responseKeys.join(", ") +
+        (sourceResult.ownedPackagesCount === null
+          ? ""
+          : "; owned packages: " + sourceResult.ownedPackagesCount + ".");
+      metadata.className = "diagnostic";
+      metricsElement.append(metadata);
+    }
   } else {
     detail.textContent = sourceResult.error;
     detail.className = "error";
