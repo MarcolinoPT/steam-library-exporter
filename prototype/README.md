@@ -84,7 +84,9 @@ Comparison:
 
 The user also tested with the Community tab in the default container; it did not work for the selected authenticated container. This confirms the practical requirement that **both origin tabs must be open in the same authenticated Firefox container**. The extension does not move or recreate tabs to satisfy this requirement.
 
-This is a successful reproduction of the earlier manual counts, not proof that either endpoint is complete or that every AppID represents a game. The Store-only metadata classification remains unvalidated at runtime. The first two attempts failed with Firefox's generic `Could not establish connection. Receiving end does not exist.` message. The implementation has since been changed to incremental background polling; the revised flow requires another manual runtime test.
+This is a successful reproduction of the earlier manual counts, not proof that either endpoint is complete or that every returned AppID represents a game.
+
+The incremental Store-only metadata classifier was subsequently tested successfully. It refreshed 46 Store-only AppIDs and attempted all 46 public metadata requests. Two returned usable details (one `game`, one `dlc`); 44 returned no usable Store details. There were no missing type fields, identity mismatches, request failures, or unattempted entries. The 44 unavailable results remain unclassified: they must not be assumed to be invalid, delisted, DLC, or non-games. This validates the incremental polling flow, not the completeness or coverage of the metadata endpoint.
 
 ## Interpretation
 
