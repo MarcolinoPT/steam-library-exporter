@@ -96,7 +96,26 @@ The current implementation uses an incremental job:
 
 This design removes the long-lived message and tab-injection operations. It still depends on the Firefox background context remaining available while the popup polls; job state is memory-only and is lost if that context unloads. The Store metadata endpoint is undocumented and its behavior may change. Community-maintained documentation reports a rate limit around 200 requests per five minutes, but Valve publishes no stable contract or limit.
 
-**Status:** incremental implementation pushed for user runtime validation; classification results remain pending. A successful comparison still does not establish that either source is complete.
+### Successful incremental runtime result
+
+The user successfully ran the incremental classifier on 2026-11-05:
+
+| Result | Count |
+|---|---:|
+| Store-only AppIDs refreshed | 46 |
+| Metadata requests attempted | 46 |
+| Successfully classified | 2 |
+| Steam-reported `game` | 1 |
+| Steam-reported `dlc` | 1 |
+| Unavailable / no Store details | 44 |
+| Missing type | 0 |
+| Identity mismatch | 0 |
+| Request failures | 0 |
+| Not attempted | 0 |
+
+All 46 requests completed without a reported network/HTTP failure or rate limit. Only two returned usable app details. The other 44 were unavailable through this metadata endpoint; this does **not** establish that they are invalid, delisted, DLC, or non-games. Their nature remains unknown and requires separate investigation.
+
+The successful run validates the incremental message/polling flow for this account and this 46-entry set. It does not establish metadata coverage or library completeness. A successful comparison still does not establish that either source is complete.
 
 Reference: [InternalSteamWebAPI — Get App Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-App-Details).
 
