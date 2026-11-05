@@ -82,15 +82,23 @@ The prototype uses each Steam origin's own existing tab for its authenticated re
 
 ## Store-only metadata classification experiment
 
-The prototype now offers a separate **Classify Store-only AppIDs** action after a successful comparison.
+The prototype offers a separate **Classify Store-only AppIDs** action after a successful comparison.
 
-It re-fetches both authenticated sources, computes the Store-only set in memory, then queries the Steam Store `/api/appdetails/` endpoint once per Store-only AppID from the existing Store tab. These metadata requests use `credentials: "omit"`, so Steam login cookies are not sent. They are paced two seconds apart, stop on HTTP 429 or the first request-level failure, and return only aggregate counts grouped by the Store-reported `data.type` field.
+The first implementation injected one long-running metadata loop into the existing Store tab. The user reported Firefox's generic `Could not establish connection. Receiving end does not exist.` error while the popup remained open. Moving the loop to a single long-running background message did not resolve the symptom. Neither failure provided an HTTP status or metadata result, so it cannot be attributed to Steam or interpreted as a rate limit.
 
-The popup does not receive AppIDs, application names, or raw metadata. Unavailable records, missing type fields, identity mismatches, request failures, and entries not attempted are reported separately. The endpoint is undocumented and its behavior may change; community-maintained documentation reports a rate limit around 200 requests per five minutes, but Valve does not publish a stable contract or limit.
+The current implementation uses an incremental job:
+- It refreshes both authenticated library sources using their existing same-container tabs.
+- It computes the Store-only set in background memory.
+- The popup starts a job and polls through short runtime messages.
+- Each poll performs at most one public Store `/api/appdetails/` request from the extension background context, using `credentials: "omit"`.
+- Requests are paced at least two seconds apart; the popup displays aggregate progress.
+- Only aggregate type counts and failure categories are returned. AppIDs, names, and raw metadata are not exposed or persisted.
+
+This design removes the long-lived message and tab-injection operations. It still depends on the Firefox background context remaining available while the popup polls; job state is memory-only and is lost if that context unloads. The Store metadata endpoint is undocumented and its behavior may change. Community-maintained documentation reports a rate limit around 200 requests per five minutes, but Valve publishes no stable contract or limit.
+
+**Status:** incremental implementation pushed for user runtime validation; classification results remain pending. A successful comparison still does not establish that either source is complete.
 
 Reference: [InternalSteamWebAPI — Get App Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-App-Details).
-
-**Status:** implementation and static syntax validation complete; user runtime validation and classification results are pending.
 
 ## Open questions
 
