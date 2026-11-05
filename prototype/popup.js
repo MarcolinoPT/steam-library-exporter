@@ -84,14 +84,25 @@ compareButton.addEventListener("click", async () => {
 
       const cookieDetail = document.createElement("p");
       const diagnostics = result.cookieDiagnostics;
-      const describeCookies = (cookies) =>
-        Object.entries(cookies)
-          .map(([name, present]) => name + " " + (present ? "present" : "absent"))
-          .join("; ");
+      if (diagnostics.error) {
+        cookieDetail.textContent = diagnostics.error;
+      } else {
+        cookieDetail.textContent = diagnostics.stores.map((store) => {
+          const describeCookies = (source) =>
+            source.count === 0
+              ? "none"
+              : source.cookies.map((cookie) =>
+                  cookie.name + " [" + cookie.domain +
+                  (cookie.httpOnly ? ", HttpOnly" : "") +
+                  (cookie.secure ? ", Secure" : "") +
+                  (cookie.session ? ", session" : ", persistent") + "]"
+                ).join("; ");
 
-      cookieDetail.textContent =
-        "Community: " + describeCookies(diagnostics.community) +
-        ". Store: " + describeCookies(diagnostics.store) + ".";
+          return "Store " + store.storeId + " (" + store.tabCount +
+            " associated tabs) — Community: " + describeCookies(store.community) +
+            "; Steam Store: " + describeCookies(store.store) + ".";
+        }).join("\\n");
+      }
       cookieDetail.className = "diagnostic";
       metricsElement.append(cookieDetail);
     }
