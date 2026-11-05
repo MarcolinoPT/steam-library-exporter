@@ -60,11 +60,54 @@ function appendComparisonMetrics(metrics) {
   metricsElement.append(definitionList);
 }
 
+function describeCookies(source) {
+  if (source.count === 0) {
+    return "none";
+  }
+
+  return source.cookies.map((cookie) =>
+    cookie.name + " [" + cookie.domain +
+    (cookie.httpOnly ? ", HttpOnly" : "") +
+    (cookie.secure ? ", Secure" : "") +
+    (cookie.session ? ", session" : ", persistent") + "]"
+  ).join("; ");
+}
+
+function appendCookieDiagnostics(diagnostics, selectedStoreId) {
+  const heading = document.createElement("h3");
+  heading.textContent = "Steam cookie metadata by Firefox store";
+  metricsElement.append(heading);
+
+  if (diagnostics.error) {
+    const detail = document.createElement("p");
+    detail.textContent = diagnostics.error;
+    detail.className = "diagnostic";
+    metricsElement.append(detail);
+    return;
+  }
+
+  const list = document.createElement("ul");
+  for (const store of diagnostics.stores) {
+    const item = document.createElement("li");
+    const selectedLabel = store.storeId === selectedStoreId
+      ? " (selected for this comparison)"
+      : "";
+    item.textContent =
+      store.storeId + " (" + store.tabCount + " associated tabs)" +
+      selectedLabel + " — Community: " + describeCookies(store.community) +
+      "; Steam Store: " + describeCookies(store.store) + ".";
+    list.append(item);
+  }
+  list.className = "diagnostic";
+  metricsElement.append(list);
+}
+
 compareButton.addEventListener("click", async () => {
   compareButton.disabled = true;
   resultsElement.hidden = true;
   errorElement.hidden = true;
-  statusElement.textContent = "Querying Steam Community and Steam Store…";
+  statusElement.textContent =
+    "Finding authenticated Steam tabs and querying both sources…";
 
   try {
     const result = await browser.runtime.sendMessage({
@@ -78,33 +121,17 @@ compareButton.addEventListener("click", async () => {
     metricsElement.replaceChildren();
 
     if (result.cookieDiagnostics) {
-      const cookieHeading = document.createElement("h3");
-      cookieHeading.textContent = "Steam cookie presence (values never exposed to the popup)";
-      metricsElement.append(cookieHeading);
+      appendCookieDiagnostics(
+        result.cookieDiagnostics,
+        result.selectedStoreId
+      );
+    }
 
-      const cookieDetail = document.createElement("p");
-      const diagnostics = result.cookieDiagnostics;
-      if (diagnostics.error) {
-        cookieDetail.textContent = diagnostics.error;
-      } else {
-        cookieDetail.textContent = diagnostics.stores.map((store) => {
-          const describeCookies = (source) =>
-            source.count === 0
-              ? "none"
-              : source.cookies.map((cookie) =>
-                  cookie.name + " [" + cookie.domain +
-                  (cookie.httpOnly ? ", HttpOnly" : "") +
-                  (cookie.secure ? ", Secure" : "") +
-                  (cookie.session ? ", session" : ", persistent") + "]"
-                ).join("; ");
-
-          return "Store " + store.storeId + " (" + store.tabCount +
-            " associated tabs) — Community: " + describeCookies(store.community) +
-            "; Steam Store: " + describeCookies(store.store) + ".";
-        }).join("\\n");
-      }
-      cookieDetail.className = "diagnostic";
-      metricsElement.append(cookieDetail);
+    if (result.selectionError) {
+      const selectionError = document.createElement("p");
+      selectionError.textContent = result.selectionError;
+      selectionError.className = "error";
+      metricsElement.append(selectionError);
     }
 
     appendSourceStatus("Steam Community", result.community);
@@ -112,7 +139,8 @@ compareButton.addEventListener("click", async () => {
 
     if (result.metrics) {
       appendComparisonMetrics(result.metrics);
-      statusElement.textContent = "Both endpoint responses were parsed.";
+      statusElement.textContent =
+        "Both endpoint responses were parsed from existing Steam tabs.";
     } else {
       statusElement.textContent =
         "At least one source could not be queried; see its diagnostic above.";
