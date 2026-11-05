@@ -456,7 +456,10 @@ async function compareSources() {
 }
 
 
-async function classifyStoreOnlyApps() {
+let activeClassificationJob = null;
+let nextClassificationJobId = 1;
+
+async function startStoreOnlyClassification() {
   const cookieDiagnostics = await getSafeCookieDiagnostics();
 
   let selected;
@@ -494,11 +497,7 @@ async function classifyStoreOnlyApps() {
   try {
     const sessionId = await getCommunitySessionId(selected.storeId);
     [communityPayload, storePayload] = await Promise.all([
-      executeSteamRequest(
-        communityTab.id,
-        COMMUNITY_ENDPOINT,
-        sessionId
-      ),
+      executeSteamRequest(communityTab.id, COMMUNITY_ENDPOINT, sessionId),
       executeSteamRequest(storeTab.id, STORE_ENDPOINT)
     ]);
   } catch (error) {
@@ -510,22 +509,14 @@ async function classifyStoreOnlyApps() {
     };
   }
 
-  if (!Array.isArray(communityPayload)) {
+  if (!Array.isArray(communityPayload) ||
+      !storePayload ||
+      typeof storePayload !== "object" ||
+      Array.isArray(storePayload) ||
+      !Array.isArray(storePayload.rgOwnedApps)) {
     return {
       ok: false,
-      error: "Steam Community returned an unexpected response shape."
-    };
-  }
-
-  if (
-    !storePayload ||
-    typeof storePayload !== "object" ||
-    Array.isArray(storePayload) ||
-    !Array.isArray(storePayload.rgOwnedApps)
-  ) {
-    return {
-      ok: false,
-      error: "Steam Store returned an unexpected response shape."
+      error: "Steam returned an unexpected library response shape."
     };
   }
 
@@ -534,12 +525,10 @@ async function classifyStoreOnlyApps() {
   try {
     community = normalizeAppIds(communityPayload);
     store = normalizeAppIds(storePayload.rgOwnedApps);
-  } catch (error) {
+  } catch {
     return {
       ok: false,
-      error: error instanceof Error
-        ? error.message
-        : "Could not normalize the Steam source entries."
+      error: "Could not normalize the refreshed Steam library entries."
     };
   }
 
@@ -550,136 +539,159 @@ async function classifyStoreOnlyApps() {
     }
   }
 
-  if (storeOnlyAppIds.length === 0) {
-    return {
-      ok: true,
-      requestedCount: 0,
-      attemptedCount: 0,
-      resolvedCount: 0,
-      typeCounts: {},
-      unavailableCount: 0,
-      missingTypeCount: 0,
-      identityMismatchCount: 0,
-      requestFailureCount: 0,
-      rateLimited: false,
-      notAttemptedCount: 0
-    };
-  }
-
-  const typeCounts = new Map();
-  let attemptedCount = 0;
-  let resolvedCount = 0;
-  let unavailableCount = 0;
-  let missingTypeCount = 0;
-  let identityMismatchCount = 0;
-  let requestFailureCount = 0;
-  let rateLimited = false;
-  let stopReason = null;
-
-  const wait = (milliseconds) =>
-    new Promise((resolve) => setTimeout(resolve, milliseconds));
-
-  for (const appId of storeOnlyAppIds) {
-    if (attemptedCount > 0) {
-      await wait(2000);
-    }
-
-    const url = new URL(
-      "https://store.steampowered.com/api/appdetails/"
-    );
-    url.searchParams.set("appids", String(appId));
-    url.searchParams.set("l", "english");
-
-    attemptedCount += 1;
-    let response;
-    try {
-      // This endpoint is public. Fetch from the extension context with
-      // credentials omitted; no Steam tab or login cookies are involved.
-      response = await fetch(url.toString(), {
-        method: "GET",
-        credentials: "omit",
-        cache: "no-store",
-        redirect: "follow"
-      });
-    } catch {
-      requestFailureCount += 1;
-      stopReason = "network-error";
-      break;
-    }
-
-    if (response.status === 429) {
-      rateLimited = true;
-      requestFailureCount += 1;
-      stopReason = "rate-limited";
-      break;
-    }
-
-    if (!response.ok || response.redirected) {
-      requestFailureCount += 1;
-      stopReason = "http-error";
-      break;
-    }
-
-    const contentType = response.headers.get("content-type") || "";
-    if (!contentType.toLowerCase().includes("application/json")) {
-      requestFailureCount += 1;
-      stopReason = "unexpected-content-type";
-      break;
-    }
-
-    let payload;
-    try {
-      payload = await response.json();
-    } catch {
-      requestFailureCount += 1;
-      stopReason = "malformed-json";
-      break;
-    }
-
-    const entry = payload && typeof payload === "object"
-      ? payload[String(appId)]
-      : null;
-
-    if (!entry || entry.success !== true || !entry.data) {
-      unavailableCount += 1;
-      continue;
-    }
-
-    if (
-      entry.data.steam_appid !== undefined &&
-      Number(entry.data.steam_appid) !== appId
-    ) {
-      identityMismatchCount += 1;
-      continue;
-    }
-
-    if (
-      typeof entry.data.type !== "string" ||
-      entry.data.type.trim().length === 0
-    ) {
-      missingTypeCount += 1;
-      continue;
-    }
-
-    const type = entry.data.type.trim().toLowerCase().slice(0, 64);
-    typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
-    resolvedCount += 1;
-  }
+  const jobId = String(nextClassificationJobId++);
+  activeClassificationJob = {
+    jobId,
+    appIds: storeOnlyAppIds,
+    nextIndex: 0,
+    lastRequestAt: 0,
+    attemptedCount: 0,
+    resolvedCount: 0,
+    unavailableCount: 0,
+    missingTypeCount: 0,
+    identityMismatchCount: 0,
+    requestFailureCount: 0,
+    rateLimited: false,
+    stopReason: null,
+    typeCounts: new Map(),
+    done: storeOnlyAppIds.length === 0
+  };
 
   return {
     ok: true,
+    jobId,
     requestedCount: storeOnlyAppIds.length,
-    attemptedCount,
-    resolvedCount,
-    typeCounts: Object.fromEntries(typeCounts),
-    unavailableCount,
-    missingTypeCount,
-    identityMismatchCount,
-    requestFailureCount,
-    rateLimited,
-    stopReason,
-    notAttemptedCount: storeOnlyAppIds.length - attemptedCount
+    done: activeClassificationJob.done
   };
+}
+
+function getClassificationProgress(job) {
+  return {
+    ok: true,
+    jobId: job.jobId,
+    requestedCount: job.appIds.length,
+    attemptedCount: job.attemptedCount,
+    resolvedCount: job.resolvedCount,
+    unavailableCount: job.unavailableCount,
+    missingTypeCount: job.missingTypeCount,
+    identityMismatchCount: job.identityMismatchCount,
+    requestFailureCount: job.requestFailureCount,
+    rateLimited: job.rateLimited,
+    stopReason: job.stopReason,
+    notAttemptedCount: job.appIds.length - job.attemptedCount,
+    typeCounts: Object.fromEntries(job.typeCounts),
+    done: job.done,
+    waitingForPacing: false
+  };
+}
+
+async function pollStoreOnlyClassification(jobId) {
+  const job = activeClassificationJob;
+  if (!job || job.jobId !== jobId) {
+    return {
+      ok: false,
+      error: "The classification job is no longer available. Start it again; no library data was persisted."
+    };
+  }
+
+  if (job.done) {
+    return getClassificationProgress(job);
+  }
+
+  const now = Date.now();
+  const remainingDelay = 2000 - (now - job.lastRequestAt);
+  if (job.lastRequestAt > 0 && remainingDelay > 0) {
+    return {
+      ...getClassificationProgress(job),
+      waitingForPacing: true,
+      retryAfterMs: remainingDelay
+    };
+  }
+
+  const appId = job.appIds[job.nextIndex];
+  const url = new URL("https://store.steampowered.com/api/appdetails/");
+  url.searchParams.set("appids", String(appId));
+  url.searchParams.set("l", "english");
+
+  job.attemptedCount += 1;
+  job.nextIndex += 1;
+  job.lastRequestAt = Date.now();
+
+  let response;
+  try {
+    response = await fetch(url.toString(), {
+      method: "GET",
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "follow"
+    });
+  } catch {
+    job.requestFailureCount += 1;
+    job.stopReason = "network-error";
+    job.done = true;
+    return getClassificationProgress(job);
+  }
+
+  if (response.status === 429) {
+    job.rateLimited = true;
+    job.requestFailureCount += 1;
+    job.stopReason = "rate-limited";
+    job.done = true;
+    return getClassificationProgress(job);
+  }
+
+  if (!response.ok || response.redirected) {
+    job.requestFailureCount += 1;
+    job.stopReason = "http-error";
+    job.done = true;
+    return getClassificationProgress(job);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    job.requestFailureCount += 1;
+    job.stopReason = "unexpected-content-type";
+    job.done = true;
+    return getClassificationProgress(job);
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    job.requestFailureCount += 1;
+    job.stopReason = "malformed-json";
+    job.done = true;
+    return getClassificationProgress(job);
+  }
+
+  const entry = payload && typeof payload === "object"
+    ? payload[String(appId)]
+    : null;
+
+  if (!entry || entry.success !== true || !entry.data) {
+    job.unavailableCount += 1;
+  } else if (
+    entry.data.steam_appid !== undefined &&
+    Number(entry.data.steam_appid) !== appId
+  ) {
+    job.identityMismatchCount += 1;
+  } else if (
+    typeof entry.data.type !== "string" ||
+    entry.data.type.trim().length === 0
+  ) {
+    job.missingTypeCount += 1;
+  } else {
+    const type = entry.data.type.trim().toLowerCase().slice(0, 64);
+    job.typeCounts.set(type, (job.typeCounts.get(type) || 0) + 1);
+    job.resolvedCount += 1;
+  }
+
+  if (job.nextIndex >= job.appIds.length) {
+    job.done = true;
+  }
+
+  return getClassificationProgress(job);
 }
 
 browser.runtime.onMessage.addListener((message) => {
