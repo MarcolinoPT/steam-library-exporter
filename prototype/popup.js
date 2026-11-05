@@ -2,6 +2,10 @@ const compareButton = document.querySelector("#compare-button");
 const classifyButton = document.querySelector("#classify-button");
 const classifyNote = document.querySelector("#classify-note");
 const profileCompareButton = document.querySelector("#profile-compare-button");
+const classifyProfileOnlyButton = document.querySelector("#classify-profile-only-button");
+const classifyProfileOnlyNote = document.querySelector("#classify-profile-only-note");
+const profileOnlyClassificationElement = document.querySelector("#profile-only-classification");
+const profileOnlyClassificationResultsElement = document.querySelector("#profile-only-classification-results");
 const profileComparisonElement = document.querySelector("#profile-comparison");
 const profileComparisonResultsElement = document.querySelector("#profile-comparison-results");
 const packageProbeButton = document.querySelector("#package-probe-button");
@@ -184,8 +188,76 @@ function appendProfileComparison(result) {
   note.className = "notice";
   note.textContent = "Only aggregate counts are displayed. AppIDs and game names remain in memory and are not logged or persisted. If the extracted count is below Steam's displayed count, the page may not have rendered every game yet; treat the overlap as a partial-page comparison.";
   profileComparisonResultsElement.append(note);
+  if (result.profileOnlyCommunityCount > 0 &&
+      result.profileOnlyStoreCount === result.profileOnlyCommunityCount) {
+    classifyProfileOnlyButton.hidden = false;
+    classifyProfileOnlyButton.disabled = false;
+    classifyProfileOnlyNote.hidden = false;
+    classifyProfileOnlyButton.textContent =
+      "Inspect " + result.profileOnlyCommunityCount + " profile-only AppIDs";
+  }
   profileComparisonElement.hidden = false;
 }
+
+
+classifyProfileOnlyButton.addEventListener("click", async () => {
+  classifyProfileOnlyButton.disabled = true;
+  profileCompareButton.disabled = true;
+  errorElement.hidden = true;
+  profileOnlyClassificationElement.hidden = true;
+  statusElement.textContent = "Refreshing the three sources and starting metadata checks for profile-only AppIDs…";
+  try {
+    const started = await browser.runtime.sendMessage({
+      type: "START_PROFILE_ONLY_CLASSIFICATION"
+    });
+    if (!started || !started.ok) {
+      throw new Error(started?.error || "Profile-only metadata checks could not be started.");
+    }
+    let result;
+    if (started.done) {
+      result = {
+        requestedCount: 0, attemptedCount: 0, resolvedCount: 0,
+        typeCounts: {}, unavailableCount: 0, missingTypeCount: 0,
+        identityMismatchCount: 0, requestFailureCount: 0,
+        rateLimited: false, notAttemptedCount: 0
+      };
+    } else {
+      result = await runClassificationPolling(started.jobId, started.requestedCount);
+    }
+    profileOnlyClassificationResultsElement.replaceChildren();
+    const typeEntries = Object.entries(result.typeCounts || {})
+      .sort(([left], [right]) => left.localeCompare(right));
+    appendDefinitionList(profileOnlyClassificationResultsElement, [
+      ["Profile-only AppIDs refreshed", result.requestedCount],
+      ["Metadata requests attempted", result.attemptedCount],
+      ["Successfully classified", result.resolvedCount],
+      ...typeEntries.map(([type, count]) => ["Steam-reported type: " + type, count]),
+      ["Unavailable / no Store details", result.unavailableCount],
+      ["Missing type field", result.missingTypeCount],
+      ["Identity mismatch", result.identityMismatchCount],
+      ["Request failures", result.requestFailureCount],
+      ...(result.stopReason ? [["Stopped early", result.stopReason]] : []),
+      ["Not attempted", result.notAttemptedCount]
+    ]);
+    const note = document.createElement("p");
+    note.className = "notice";
+    note.textContent = "Public appdetails metadata is not an entitlement check. Unavailable records remain unknown; they are not assumed invalid or delisted. Only aggregate counts are displayed.";
+    profileOnlyClassificationResultsElement.append(note);
+    profileOnlyClassificationElement.hidden = false;
+    statusElement.textContent = result.rateLimited
+      ? "Profile-only classification stopped because Steam rate-limited requests."
+      : result.stopReason
+        ? "Profile-only classification stopped after a request failure."
+        : "Profile-only metadata classification completed.";
+  } catch (error) {
+    errorElement.textContent = error instanceof Error ? error.message : "An unexpected error occurred.";
+    errorElement.hidden = false;
+    statusElement.textContent = "Profile-only classification failed.";
+  } finally {
+    classifyProfileOnlyButton.disabled = false;
+    profileCompareButton.disabled = false;
+  }
+});
 
 profileCompareButton.addEventListener("click", async () => {
   profileCompareButton.disabled = true;
