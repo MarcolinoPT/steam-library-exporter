@@ -32,6 +32,17 @@
         in the selected container and compares aggregate overlap with the
         authenticated endpoints. The page is not navigated or modified.
       </p>
+      <button id="classify-profile-only-button" type="button" hidden>
+        Inspect profile-only AppIDs
+      </button>
+      <p id="classify-profile-only-note" class="notice" hidden>
+        Checks public Steam appdetails metadata one AppID at a time, with
+        conservative pacing. Only aggregate classifications are displayed.
+      </p>
+      <section id="profile-only-classification" hidden aria-label="Profile-only metadata classification">
+        <h2>Profile-only metadata classification</h2>
+        <div id="profile-only-classification-results"></div>
+      </section>
       <section id="profile-comparison" hidden aria-label="Profile Games page comparison">
         <h2>Profile Games page comparison</h2>
         <div id="profile-comparison-results"></div>
