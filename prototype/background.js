@@ -13,7 +13,7 @@ function extractAppId(entry) {
     return entry;
   }
 
-  if (typeof entry === "string" && /^\d+$/.test(entry)) {
+  if (typeof entry === "string" && /^\\d+$/.test(entry)) {
     return Number(entry);
   }
 
@@ -22,7 +22,7 @@ function extractAppId(entry) {
     if (typeof candidate === "number") {
       return candidate;
     }
-    if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
+    if (typeof candidate === "string" && /^\\d+$/.test(candidate)) {
       return Number(candidate);
     }
   }
@@ -86,88 +86,6 @@ function compareAppIds(community, store) {
   };
 }
 
-async function fetchJsonEndpoint(endpoint, sourceName) {
-  let response;
-
-  try {
-    response = await fetch(endpoint, {
-      method: "GET",
-      credentials: "include",
-      cache: "no-store",
-      redirect: "follow"
-    });
-  } catch {
-    throw new Error(
-      sourceName + ": network request failed. Check the connection and extension host permissions."
-    );
-  }
-
-  if (response.redirected) {
-    throw new Error(
-      sourceName + ": Steam redirected the request. The session may be missing or expired."
-    );
-  }
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(
-      sourceName + ": Steam rejected the request (HTTP " + response.status + ")."
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      sourceName + ": Steam returned HTTP " + response.status + "."
-    );
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    throw new Error(
-      sourceName + ": expected JSON but received a different content type."
-    );
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new Error(sourceName + ": Steam returned malformed JSON.");
-  }
-
-  return payload;
-}
-
-async function hasCookie(url, name) {
-  try {
-    const cookie = await browser.cookies.get({ url, name });
-    return Boolean(cookie && typeof cookie.value === "string" && cookie.value.length > 0);
-  } catch {
-    return false;
-  }
-}
-
-async function getCommunitySessionId() {
-  let cookie;
-  try {
-    cookie = await browser.cookies.get({
-      url: COMMUNITY_ENDPOINT,
-      name: "sessionid"
-    });
-  } catch {
-    throw new Error(
-      "Steam Community: Firefox could not read the sessionid cookie. Check the extension cookie permission and Steam sign-in."
-    );
-  }
-
-  if (!cookie || typeof cookie.value !== "string" || cookie.value.length === 0) {
-    throw new Error(
-      "Steam Community: no sessionid cookie was available for this profile. Open Steam Community, sign in, and retry."
-    );
-  }
-
-  return cookie.value;
-}
-
 async function getSafeCookieDiagnostics() {
   let cookieStores;
   try {
@@ -179,8 +97,14 @@ async function getSafeCookieDiagnostics() {
   const stores = [];
   for (const cookieStore of cookieStores) {
     const [communityCookies, storeCookies] = await Promise.all([
-      browser.cookies.getAll({ domain: "steamcommunity.com", storeId: cookieStore.id }),
-      browser.cookies.getAll({ domain: "steampowered.com", storeId: cookieStore.id })
+      browser.cookies.getAll({
+        domain: "steamcommunity.com",
+        storeId: cookieStore.id
+      }),
+      browser.cookies.getAll({
+        domain: "steampowered.com",
+        storeId: cookieStore.id
+      })
     ]);
 
     const summarize = (cookies) => ({
@@ -191,7 +115,9 @@ async function getSafeCookieDiagnostics() {
         secure: cookie.secure,
         httpOnly: cookie.httpOnly,
         session: cookie.session
-      })).sort((a, b) => a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name))
+      })).sort((a, b) =>
+        a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name)
+      )
     });
 
     stores.push({
@@ -205,48 +131,186 @@ async function getSafeCookieDiagnostics() {
   return { stores };
 }
 
-async function fetchCommunitySource() {
-  const sessionId = await getCommunitySessionId();
-  const endpoint = new URL(COMMUNITY_ENDPOINT);
-  endpoint.searchParams.set("sessionid", sessionId);
-
-  const payload = await fetchJsonEndpoint(
-    endpoint.toString(),
-    "Steam Community"
+function hasAuthenticatedCookies(store) {
+  return store.community.cookies.some(
+    (cookie) => cookie.name === "steamLoginSecure"
+  ) && store.store.cookies.some(
+    (cookie) => cookie.name === "steamLoginSecure"
   );
-
-  if (!Array.isArray(payload)) {
-    throw new Error(
-      "Steam Community: response shape was not the expected JSON array."
-    );
-  }
-
-  return normalizeAppIds(payload);
 }
 
-async function fetchStoreSource() {
-  const payload = await fetchJsonEndpoint(STORE_ENDPOINT, "Steam Store");
-
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new Error("Steam Store: response was not a JSON object.");
+async function chooseAuthenticatedStore(cookieDiagnostics) {
+  if (cookieDiagnostics.error) {
+    throw new Error(cookieDiagnostics.error);
   }
 
-  if (!Array.isArray(payload.rgOwnedApps)) {
-    const keys = Object.keys(payload).sort();
+  const candidates = cookieDiagnostics.stores.filter(hasAuthenticatedCookies);
+  if (candidates.length === 0) {
     throw new Error(
-      "Steam Store: rgOwnedApps was missing or was not an array. Response keys: " +
-      keys.join(", ")
+      "No Firefox cookie store has Steam login cookies for both Community and Store. Sign in to both Steam sites in the same container and retry."
     );
   }
 
-  const normalized = normalizeAppIds(payload.rgOwnedApps);
+  const tabs = await browser.tabs.query({});
+  const activeTabs = await browser.tabs.query({
+    active: true,
+    lastFocusedWindow: true
+  });
+  const activeSteamTab = activeTabs.find((tab) => {
+    try {
+      const host = new URL(tab.url).hostname;
+      return host === "steamcommunity.com" ||
+        host === "store.steampowered.com";
+    } catch {
+      return false;
+    }
+  });
+
+  if (activeSteamTab && candidates.some(
+    (store) => store.storeId === activeSteamTab.cookieStoreId
+  )) {
+    return {
+      storeId: activeSteamTab.cookieStoreId,
+      tabs
+    };
+  }
+
+  if (candidates.length !== 1) {
+    throw new Error(
+      "Multiple Firefox containers have Steam login cookies. Activate a Steam tab in the container you want to export from, then retry."
+    );
+  }
+
   return {
-    ...normalized,
-    responseKeys: Object.keys(payload).sort(),
-    ownedPackagesCount: Array.isArray(payload.rgOwnedPackages)
-      ? payload.rgOwnedPackages.length
-      : null
+    storeId: candidates[0].storeId,
+    tabs
   };
+}
+
+function findExistingSteamTab(tabs, storeId, hostname) {
+  return tabs
+    .filter((tab) => {
+      if (tab.cookieStoreId !== storeId || typeof tab.url !== "string") {
+        return false;
+      }
+      try {
+        return new URL(tab.url).hostname === hostname;
+      } catch {
+        return false;
+      }
+    })
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0] ?? null;
+}
+
+async function getCommunitySessionId(storeId) {
+  let cookie;
+  try {
+    cookie = await browser.cookies.get({
+      url: COMMUNITY_ENDPOINT,
+      name: "sessionid",
+      storeId
+    });
+  } catch {
+    throw new Error(
+      "Steam Community: Firefox could not read the sessionid cookie for the selected container."
+    );
+  }
+
+  if (!cookie || typeof cookie.value !== "string" || cookie.value.length === 0) {
+    throw new Error(
+      "Steam Community: no sessionid cookie was available in the selected container."
+    );
+  }
+
+  return cookie.value;
+}
+
+async function executeSteamRequest(tabId, endpoint, sessionId = null) {
+  let injectionResults;
+  try {
+    injectionResults = await browser.scripting.executeScript({
+      target: { tabId },
+      func: async (requestUrl, communitySessionId) => {
+        try {
+          const url = new URL(requestUrl);
+          if (communitySessionId) {
+            url.searchParams.set("sessionid", communitySessionId);
+          }
+
+          const response = await fetch(url.toString(), {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            redirect: "follow"
+          });
+
+          const contentType = response.headers.get("content-type") || "";
+          if (response.redirected) {
+            return {
+              ok: false,
+              error: "Steam redirected the request. The selected session may be missing or expired."
+            };
+          }
+          if (response.status === 401 || response.status === 403) {
+            return {
+              ok: false,
+              error: "Steam rejected the request (HTTP " + response.status + ")."
+            };
+          }
+          if (!response.ok) {
+            return {
+              ok: false,
+              error: "Steam returned HTTP " + response.status + "."
+            };
+          }
+          if (!contentType.toLowerCase().includes("application/json")) {
+            return {
+              ok: false,
+              error: "Steam returned a non-JSON response."
+            };
+          }
+
+          let payload;
+          try {
+            payload = await response.json();
+          } catch {
+            return {
+              ok: false,
+              error: "Steam returned malformed JSON."
+            };
+          }
+
+          return { ok: true, payload };
+        } catch {
+          return {
+            ok: false,
+            error: "The request failed inside the existing Steam tab."
+          };
+        }
+      },
+      args: [endpoint, sessionId]
+    });
+  } catch {
+    throw new Error(
+      "Firefox could not run the request in the existing Steam tab. Confirm the tab is loaded and try again."
+    );
+  }
+
+  const mainFrameResult = injectionResults.find(
+    (result) => result.frameId === 0
+  );
+  if (!mainFrameResult || mainFrameResult.error) {
+    throw new Error(
+      "Firefox could not execute the request in the existing Steam tab."
+    );
+  }
+
+  const result = mainFrameResult.result;
+  if (!result || !result.ok) {
+    throw new Error(result?.error || "Steam request failed.");
+  }
+
+  return result.payload;
 }
 
 async function captureSource(fetchSource) {
@@ -271,20 +335,102 @@ async function captureSource(fetchSource) {
   }
 }
 
-browser.runtime.onMessage.addListener(async (message) => {
-  if (!message || message.type !== "COMPARE_SOURCES") {
-    return undefined;
+async function compareSources() {
+  const cookieDiagnostics = await getSafeCookieDiagnostics();
+
+  let selected;
+  try {
+    selected = await chooseAuthenticatedStore(cookieDiagnostics);
+  } catch (error) {
+    return {
+      ok: true,
+      cookieDiagnostics,
+      selectionError: error instanceof Error
+        ? error.message
+        : "Could not select an authenticated Firefox container.",
+      community: { ok: false, error: "Not queried." },
+      store: { ok: false, error: "Not queried." },
+      metrics: null
+    };
   }
 
-  const [community, store, cookieDiagnostics] = await Promise.all([
-    captureSource(fetchCommunitySource),
-    captureSource(fetchStoreSource),
-    getSafeCookieDiagnostics()
+  const communityTab = findExistingSteamTab(
+    selected.tabs,
+    selected.storeId,
+    "steamcommunity.com"
+  );
+  const storeTab = findExistingSteamTab(
+    selected.tabs,
+    selected.storeId,
+    "store.steampowered.com"
+  );
+
+  const [community, store] = await Promise.all([
+    captureSource(async () => {
+      if (!communityTab) {
+        throw new Error(
+          "No existing Steam Community tab was found in the authenticated container. Open Steam Community in that container and retry; the extension will not open a tab."
+        );
+      }
+
+      const sessionId = await getCommunitySessionId(selected.storeId);
+      const payload = await executeSteamRequest(
+        communityTab.id,
+        COMMUNITY_ENDPOINT,
+        sessionId
+      );
+
+      if (!Array.isArray(payload)) {
+        throw new Error(
+          "Steam Community: response shape was not the expected JSON array."
+        );
+      }
+
+      return normalizeAppIds(payload);
+    }),
+    captureSource(async () => {
+      if (!storeTab) {
+        throw new Error(
+          "No existing Steam Store tab was found in the authenticated container. Open Steam Store in that container and retry; the extension will not open a tab."
+        );
+      }
+
+      const payload = await executeSteamRequest(
+        storeTab.id,
+        STORE_ENDPOINT
+      );
+
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw new Error("Steam Store: response was not a JSON object.");
+      }
+
+      if (!Array.isArray(payload.rgOwnedApps)) {
+        const keys = Object.keys(payload).sort();
+        throw new Error(
+          "Steam Store: rgOwnedApps was missing or was not an array. Response keys: " +
+          keys.join(", ")
+        );
+      }
+
+      const normalized = normalizeAppIds(payload.rgOwnedApps);
+      return {
+        ...normalized,
+        responseKeys: Object.keys(payload).sort(),
+        ownedPackagesCount: Array.isArray(payload.rgOwnedPackages)
+          ? payload.rgOwnedPackages.length
+          : null
+      };
+    })
   ]);
 
   return {
     ok: true,
     cookieDiagnostics,
+    selectedStoreId: selected.storeId,
+    selectedTabs: {
+      community: Boolean(communityTab),
+      store: Boolean(storeTab)
+    },
     community: community.ok
       ? {
           ok: true,
@@ -307,4 +453,12 @@ browser.runtime.onMessage.addListener(async (message) => {
       ? compareAppIds(community, store)
       : null
   };
+}
+
+browser.runtime.onMessage.addListener((message) => {
+  if (!message || message.type !== "COMPARE_SOURCES") {
+    return undefined;
+  }
+
+  return compareSources();
 });
