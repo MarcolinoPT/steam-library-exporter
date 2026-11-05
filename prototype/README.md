@@ -26,7 +26,7 @@ The Community session ID is retrieved in memory and added only to the Community 
 
 - Response bodies and the session ID are handled in memory only.
 - AppIDs are normalized to positive safe integers.
-- Only aggregate counts and non-sensitive Store response-shape metadata (top-level keys and owned-package count) are returned to the popup.
+- Only aggregate counts, non-sensitive Store response-shape metadata (top-level keys and owned-package count), and boolean cookie-presence diagnostics are returned to the popup. Cookie values are never exposed to the popup.
 - Raw records, cookies, and session material are never logged or persisted.
 - No requests are sent to any destination other than the two Steam origins.
 
