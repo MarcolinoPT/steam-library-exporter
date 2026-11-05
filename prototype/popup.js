@@ -1,6 +1,9 @@
 const compareButton = document.querySelector("#compare-button");
 const classifyButton = document.querySelector("#classify-button");
 const classifyNote = document.querySelector("#classify-note");
+const profileCompareButton = document.querySelector("#profile-compare-button");
+const profileComparisonElement = document.querySelector("#profile-comparison");
+const profileComparisonResultsElement = document.querySelector("#profile-comparison-results");
 const packageProbeButton = document.querySelector("#package-probe-button");
 const packageProbeNote = document.querySelector("#package-probe-note");
 const packageProbeElement = document.querySelector("#package-probe");
@@ -157,6 +160,61 @@ function appendClassification(result) {
   classificationResultsElement.append(note);
   classificationElement.hidden = false;
 }
+
+ 
+function appendProfileComparison(result) {
+  profileComparisonResultsElement.replaceChildren();
+  appendDefinitionList(profileComparisonResultsElement, [
+    ["Count shown by Steam's All Games tab", result.profileReportedCount ?? "Not detected"],
+    ["Rendered game rows", result.profileRenderedGameRowCount],
+    ["Unique AppIDs extracted from page", result.profileExtractedUniqueAppCount],
+    ["Community source unique AppIDs", result.communityUniqueAppCount],
+    ["Store source unique AppIDs", result.storeUniqueAppCount],
+    ["Profile AppIDs also in Community", result.profileCommunityOverlapCount],
+    ["Profile AppIDs also in Store", result.profileStoreOverlapCount],
+    ["Present in all three sources", result.allThreeOverlapCount],
+    ["Profile AppIDs absent from Community", result.profileOnlyCommunityCount],
+    ["Profile AppIDs absent from Store", result.profileOnlyStoreCount],
+    ["Community AppIDs absent from profile page", result.communityNotOnProfileCount],
+    ["Store AppIDs absent from profile page", result.storeNotOnProfileCount],
+    ["Extracted count matches Steam's displayed count", result.profileExtractionMatchesReportedCount === null
+      ? "Unknown" : result.profileExtractionMatchesReportedCount ? "Yes" : "No"]
+  ]);
+  const note = document.createElement("p");
+  note.className = "notice";
+  note.textContent = "Only aggregate counts are displayed. AppIDs and game names remain in memory and are not logged or persisted. If the extracted count is below Steam's displayed count, the page may not have rendered every game yet; treat the overlap as a partial-page comparison.";
+  profileComparisonResultsElement.append(note);
+  profileComparisonElement.hidden = false;
+}
+
+profileCompareButton.addEventListener("click", async () => {
+  profileCompareButton.disabled = true;
+  compareButton.disabled = true;
+  classifyButton.disabled = true;
+  packageProbeButton.disabled = true;
+  errorElement.hidden = true;
+  profileComparisonElement.hidden = true;
+  statusElement.textContent = "Reading the existing profile Games page and refreshing authenticated sources…";
+  try {
+    const result = await browser.runtime.sendMessage({
+      type: "COMPARE_VISIBLE_PROFILE_GAMES"
+    });
+    if (!result || !result.ok) {
+      throw new Error(result?.error || "The profile page comparison could not be completed.");
+    }
+    appendProfileComparison(result);
+    statusElement.textContent = "Profile page comparison completed; aggregate counts only.";
+  } catch (error) {
+    errorElement.textContent = error instanceof Error ? error.message : "An unexpected error occurred.";
+    errorElement.hidden = false;
+    statusElement.textContent = "Profile page comparison failed.";
+  } finally {
+    profileCompareButton.disabled = false;
+    compareButton.disabled = false;
+    classifyButton.disabled = false;
+    packageProbeButton.disabled = false;
+  }
+});
 
 compareButton.addEventListener("click", async () => {
   compareButton.disabled = true;
