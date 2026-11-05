@@ -46,7 +46,7 @@ Selecting it:
 
 The metadata requests execute in the existing Steam Store tab and use `credentials: "omit"`; Steam login cookies are not sent with them. They do not contact any third party. AppIDs, application names, full metadata responses, and the Store-only set are never returned to the popup, logged, or persisted.
 
-Requests are spaced 2 seconds apart. Community documentation reports a rate limit of approximately 200 requests per five minutes for this undocumented endpoint; Valve does not publish a stable contract or limit. The conservative delay is intended to avoid burst traffic. A HTTP 429 response stops the run immediately and reports how many entries were not attempted. A full run for 46 entries takes about 90 seconds. Keep the popup open until it completes.
+Requests are spaced 2 seconds apart. Community documentation reports a rate limit of approximately 200 requests per five minutes for this undocumented endpoint; Valve does not publish a stable contract or limit. The conservative delay is intended to avoid burst traffic. An HTTP 429 response or the first request-level failure stops the run immediately and reports how many entries were not attempted. A full run for 46 entries takes about 90 seconds. Keep the popup open until it completes.
 
 A missing Store record, unsuccessful response, missing type field, identity mismatch, or request failure is counted separately; it is never silently classified as a game. The metadata endpoint is undocumented and can change. Its type value is a Store classification, not proof of a user's entitlement type or of library completeness.
 
