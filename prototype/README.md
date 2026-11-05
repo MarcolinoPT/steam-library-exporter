@@ -53,6 +53,18 @@ A missing Store record, unsuccessful response, missing type field, identity mism
 
 Reference for the observed appdetails behavior and rate limit: [InternalSteamWebAPI — Get App Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-App-Details). This is community-maintained documentation, not an official Valve API contract.
 
+## Owned-package relationship probe
+
+After a successful comparison with an `rgOwnedPackages` array, the popup offers **Probe owned package sample (10)**.
+
+The probe refreshes both authenticated library sources from the existing same-container tabs, derives the Store-only AppID set in memory, and samples up to 10 unique package IDs. The sample is evenly spaced across the package list returned by Steam rather than taking only the first entries. It sends one unauthenticated public request to `/api/packagedetails/` with the sampled IDs as a comma-separated `packageids` parameter and `credentials: "omit"`.
+
+The response is inspected in memory. Only aggregate metrics are returned: package counts, whether package app lists were available, app relationship counts, unique AppID count, invalid entry counts, and how many sampled AppIDs overlap the Store-only set. Package IDs, AppIDs, package names, app names, and raw response data are never returned to the popup, logged, or persisted.
+
+This is an exploratory catalog relationship test. A package's public `apps` list describes catalog contents; it does not prove that every included app is individually entitled to the account. A sample cannot establish coverage of the full package set. If the endpoint behaves consistently, a separate follow-up experiment can evaluate the full set of owned packages.
+
+Reference: [InternalSteamWebAPI — Get Package Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-Package-Details). This is community-maintained documentation, not an official Valve API contract.
+
 ## Data handling
 
 - Response bodies, AppID sets, and session material are handled in memory only.
