@@ -127,7 +127,26 @@ The prototype now has a separate profile-page comparison action. It requires an 
 
 The implementation does not scroll, reload, navigate, open, activate, or otherwise modify tabs. It does not return or persist AppIDs or names. Because the page may render only a subset of the full list in the current DOM, the comparison reports the displayed count separately from the extracted unique AppID count. A mismatch means the page extraction is partial and must not be treated as a complete profile set.
 
-**Runtime validation pending:** test whether the currently loaded page DOM contains all 326 AppIDs, and then inspect the three-way overlap. If fewer than 326 IDs are extracted, investigate Steam's page rendering/lazy-loading behavior before drawing coverage conclusions. Do not add automated scrolling without a separate decision.
+**Successful runtime validation (2026-11-05):**
+
+| Metric | Result |
+|---|---:|
+| Steam-displayed All Games count | 326 |
+| Rendered `.gameListRow` elements | 0 |
+| Unique AppIDs extracted from DOM | 326 |
+| Extracted count matches displayed count | Yes |
+| In Community | 312 |
+| In Store | 312 |
+| In all three sources | 312 |
+| Profile-only (absent from both endpoints) | 14 |
+| Community entries absent from profile page | 187 |
+| Store entries absent from profile page | 233 |
+
+The zero `.gameListRow` count is not a failed extraction: AppIDs were successfully obtained from other DOM selectors, and the extracted unique count exactly matched Steam's displayed count. This is strong validation for the current page rendering, but not a guarantee about other page states or accounts.
+
+The follow-up profile-only metadata probe refreshed all three sources, re-extracted the 14 profile-only AppIDs, and completed 14 individual public appdetails requests. All 14 returned usable metadata with Steam-reported type `demo`; there were no unavailable results, missing types, identity mismatches, request failures, or unattempted entries.
+
+This supports the hypothesis that the profile's All Games presentation includes demos omitted from both authenticated endpoint sets for this account. It does not prove that every profile-only discrepancy on other accounts is a demo, nor does public appdetails metadata prove account entitlement. Preserve app type as a distinct classification rather than treating demos as full games.
 
 ## Profile-only AppID metadata probe
 
