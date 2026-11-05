@@ -3,6 +3,10 @@ const classifyButton = document.querySelector("#classify-button");
 const classifyNote = document.querySelector("#classify-note");
 const profileCompareButton = document.querySelector("#profile-compare-button");
 const classifyProfileOnlyButton = document.querySelector("#classify-profile-only-button");
+const classifyStoreNotProfileButton = document.querySelector("#classify-store-not-profile-button");
+const classifyStoreNotProfileNote = document.querySelector("#classify-store-not-profile-note");
+const storeNotProfileClassificationElement = document.querySelector("#store-not-profile-classification");
+const storeNotProfileClassificationResultsElement = document.querySelector("#store-not-profile-classification-results");
 const classifyProfileOnlyNote = document.querySelector("#classify-profile-only-note");
 const profileOnlyClassificationElement = document.querySelector("#profile-only-classification");
 const profileOnlyClassificationResultsElement = document.querySelector("#profile-only-classification-results");
@@ -188,6 +192,10 @@ function appendProfileComparison(result) {
   note.className = "notice";
   note.textContent = "Only aggregate counts are displayed. AppIDs and game names remain in memory and are not logged or persisted. If the extracted count is below Steam's displayed count, the page may not have rendered every game yet; treat the overlap as a partial-page comparison.";
   profileComparisonResultsElement.append(note);
+  if (result.storeNotOnProfileCount > 0) {
+    classifyStoreNotProfileButton.hidden = false;
+    classifyStoreNotProfileButton.disabled = false;
+  }
   if (result.profileOnlyCommunityCount > 0 &&
       result.profileOnlyStoreCount === result.profileOnlyCommunityCount) {
     classifyProfileOnlyButton.hidden = false;
@@ -199,6 +207,68 @@ function appendProfileComparison(result) {
   profileComparisonElement.hidden = false;
 }
 
+
+
+classifyStoreNotProfileButton.addEventListener("click", async () => {
+  classifyStoreNotProfileButton.disabled = true;
+  profileCompareButton.disabled = true;
+  classifyProfileOnlyButton.disabled = true;
+  errorElement.hidden = true;
+  storeNotProfileClassificationElement.hidden = true;
+  statusElement.textContent = "Refreshing sources and preparing Store AppIDs absent from the profile…";
+  try {
+    const started = await browser.runtime.sendMessage({
+      type: "START_STORE_NOT_PROFILE_CLASSIFICATION"
+    });
+    if (!started || !started.ok) {
+      throw new Error(started?.error || "Store-not-profile classification could not be started.");
+    }
+    let result;
+    if (started.done) {
+      result = {
+        requestedCount: 0, attemptedCount: 0, resolvedCount: 0,
+        typeCounts: {}, unavailableCount: 0, missingTypeCount: 0,
+        identityMismatchCount: 0, requestFailureCount: 0,
+        rateLimited: false, notAttemptedCount: 0
+      };
+    } else {
+      result = await runClassificationPolling(started.jobId, started.requestedCount);
+    }
+    storeNotProfileClassificationResultsElement.replaceChildren();
+    const typeEntries = Object.entries(result.typeCounts || {})
+      .sort(([left], [right]) => left.localeCompare(right));
+    appendDefinitionList(storeNotProfileClassificationResultsElement, [
+      ["Store AppIDs absent from profile refreshed", result.requestedCount],
+      ["Metadata requests attempted", result.attemptedCount],
+      ["Successfully classified", result.resolvedCount],
+      ...typeEntries.map(([type, count]) => ["Steam-reported type: " + type, count]),
+      ["Unavailable / no Store details", result.unavailableCount],
+      ["Missing type field", result.missingTypeCount],
+      ["Identity mismatch", result.identityMismatchCount],
+      ["Request failures", result.requestFailureCount],
+      ...(result.stopReason ? [["Stopped early", result.stopReason]] : []),
+      ["Not attempted", result.notAttemptedCount]
+    ]);
+    const note = document.createElement("p");
+    note.className = "notice";
+    note.textContent = "The profile comparison set is refreshed at the start of this run. Public appdetails metadata describes Store catalogue records, not account entitlement. Unavailable entries remain unknown. Only aggregate counts are displayed.";
+    storeNotProfileClassificationResultsElement.append(note);
+    storeNotProfileClassificationElement.hidden = false;
+    statusElement.textContent = result.rateLimited
+      ? "Store-not-profile classification stopped because Steam rate-limited requests."
+      : result.stopReason
+        ? "Store-not-profile classification stopped after a request failure."
+        : "Store-not-profile metadata classification completed.";
+  } catch (error) {
+    errorElement.textContent = error instanceof Error ? error.message : "An unexpected error occurred.";
+    errorElement.hidden = false;
+    statusElement.textContent = "Store-not-profile classification failed.";
+  } finally {
+    classifyStoreNotProfileButton.disabled = false;
+    profileCompareButton.disabled = false;
+    classifyProfileOnlyButton.disabled = false;
+  }
+});
 
 classifyProfileOnlyButton.addEventListener("click", async () => {
   classifyProfileOnlyButton.disabled = true;
