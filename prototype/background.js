@@ -571,7 +571,7 @@ async function classifyStoreOnlyApps() {
     injectionResults = await browser.scripting.executeScript({
       target: { tabId: storeTab.id },
       func: async (appIds) => {
-        const typeCounts = Object.create(null);
+        const typeCounts = new Map();
         let attemptedCount = 0;
         let resolvedCount = 0;
         let unavailableCount = 0;
@@ -585,7 +585,7 @@ async function classifyStoreOnlyApps() {
 
         for (const appId of appIds) {
           if (attemptedCount > 0) {
-            await wait(1600);
+            await wait(2000);
           }
 
           const url = new URL(
@@ -659,7 +659,7 @@ async function classifyStoreOnlyApps() {
           }
 
           const type = entry.data.type.trim().toLowerCase().slice(0, 64);
-          typeCounts[type] = (typeCounts[type] || 0) + 1;
+          typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
           resolvedCount += 1;
         }
 
