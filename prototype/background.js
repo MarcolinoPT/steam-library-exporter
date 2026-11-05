@@ -579,6 +579,7 @@ async function classifyStoreOnlyApps() {
         let identityMismatchCount = 0;
         let requestFailureCount = 0;
         let rateLimited = false;
+        let stopReason = null;
 
         const wait = (milliseconds) =>
           new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -605,24 +606,28 @@ async function classifyStoreOnlyApps() {
             });
           } catch {
             requestFailureCount += 1;
-            continue;
+            stopReason = "network-error";
+            break;
           }
 
           if (response.status === 429) {
             rateLimited = true;
             requestFailureCount += 1;
+            stopReason = "rate-limited";
             break;
           }
 
           if (!response.ok || response.redirected) {
             requestFailureCount += 1;
-            continue;
+            stopReason = "http-error";
+            break;
           }
 
           const contentType = response.headers.get("content-type") || "";
           if (!contentType.toLowerCase().includes("application/json")) {
             requestFailureCount += 1;
-            continue;
+            stopReason = "unexpected-content-type";
+            break;
           }
 
           let payload;
@@ -630,7 +635,8 @@ async function classifyStoreOnlyApps() {
             payload = await response.json();
           } catch {
             requestFailureCount += 1;
-            continue;
+            stopReason = "malformed-json";
+            break;
           }
 
           const entry = payload && typeof payload === "object"
@@ -673,6 +679,7 @@ async function classifyStoreOnlyApps() {
           identityMismatchCount,
           requestFailureCount,
           rateLimited,
+          stopReason,
           notAttemptedCount: appIds.length - attemptedCount
         };
       },
