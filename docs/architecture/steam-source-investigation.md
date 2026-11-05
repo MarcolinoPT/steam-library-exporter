@@ -129,6 +129,14 @@ The implementation does not scroll, reload, navigate, open, activate, or otherwi
 
 **Runtime validation pending:** test whether the currently loaded page DOM contains all 326 AppIDs, and then inspect the three-way overlap. If fewer than 326 IDs are extracted, investigate Steam's page rendering/lazy-loading behavior before drawing coverage conclusions. Do not add automated scrolling without a separate decision.
 
+## Profile-only AppID metadata probe
+
+The first successful profile page comparison extracted 326 unique AppIDs, matching the Steam page's displayed All Games count. It found 312 AppIDs in all three sources, and 14 profile-page AppIDs absent from both authenticated endpoints. The 14 are the next targeted investigation set.
+
+A prototype action now refreshes both authenticated endpoint responses and re-reads the profile page AppIDs from the existing page DOM. It selects the profile AppIDs absent from both Community and Store, then checks public Store `/api/appdetails/` metadata one ID per request with at least two seconds between requests. It uses the existing incremental in-memory job/polling mechanism. Only aggregate type counts and unresolved/failure counts are returned. The profile page and both source tabs must remain open in the same authenticated container; no tab is opened, scrolled, reloaded, or navigated.
+
+**Interpretation guardrail:** appdetails metadata is not an entitlement check. An unavailable response does not prove an AppID is invalid, delisted, or not a game. Runtime validation of this targeted probe is pending.
+
 ## Owned-package relationship probe
 
 A separate prototype action now tests the public Store package-details endpoint against a small sample of the account's `rgOwnedPackages` entries.
