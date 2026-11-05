@@ -53,6 +53,14 @@ A missing Store record, unsuccessful response, missing type field, identity mism
 
 Reference for the observed appdetails behavior and rate limit: [InternalSteamWebAPI — Get App Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-App-Details). This is community-maintained documentation, not an official Valve API contract.
 
+## Profile Games page comparison
+
+The popup also offers **Compare profile Games page (All Games)**. It requires an already-open Steam Community profile Games page (for example, `/id/<profile>/games/?tab=all`) in the selected authenticated Firefox container, alongside the existing Community and Store tabs.
+
+The prototype inspects the currently rendered page DOM in place. It extracts positive AppIDs from `data-appid` attributes and app links, detects Steam's displayed **All Games** count when present, and compares the extracted set in memory with freshly queried Community and Store sets. It reports only aggregate overlap and difference counts. It does not open, reload, scroll, activate, or navigate tabs; it does not export game names or AppIDs.
+
+The page may render only part of the library at a time. The result therefore includes both Steam's displayed count and the number of unique AppIDs extracted from the current DOM. If those counts differ, treat the page comparison as partial rather than assuming the profile page has been fully read. The page's visible list is a third reference set, not a canonical entitlement source.
+
 ## Owned-package relationship probe
 
 After a successful comparison with an `rgOwnedPackages` array, the popup offers **Probe owned package sample (10)**.
