@@ -825,45 +825,86 @@ async function probeOwnedPackageSample() {
     };
   }
 
-  const url = new URL("https://store.steampowered.com/api/packagedetails/");
-  url.searchParams.set("packageids", sample.join(","));
-  url.searchParams.set("l", "english");
+  const packageResponses = new Map();
+  let completedPackageRequestCount = 0;
 
-  let response;
-  try {
-    response = await fetch(url.toString(), {
-      method: "GET",
-      credentials: "omit",
-      cache: "no-store",
-      redirect: "follow"
-    });
-  } catch {
-    return { ok: false, error: "The public package-details request failed at the network layer." };
-  }
+  for (let index = 0; index < sample.length; index += 1) {
+    if (index > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
 
-  if (response.status === 429) {
-    return { ok: false, error: "Steam rate-limited the package-details sample (HTTP 429)." };
-  }
-  if (!response.ok || response.redirected) {
-    return {
-      ok: false,
-      error: "Steam package-details request failed (HTTP " +
-        response.status + (response.redirected ? ", redirected" : "") + ")."
-    };
-  }
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    return { ok: false, error: "Steam package-details returned a non-JSON response." };
-  }
+    const packageId = sample[index];
+    const url = new URL("https://store.steampowered.com/api/packagedetails/");
+    url.searchParams.set("packageids", String(packageId));
+    url.searchParams.set("l", "english");
 
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    return { ok: false, error: "Steam package-details returned malformed JSON." };
-  }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return { ok: false, error: "Steam package-details returned an unexpected JSON shape." };
+    let response;
+    try {
+      response = await fetch(url.toString(), {
+        method: "GET",
+        credentials: "omit",
+        cache: "no-store",
+        redirect: "follow"
+      });
+    } catch {
+      return {
+        ok: false,
+        error: "A public package-details request failed at the network layer.",
+        completedPackageRequestCount,
+        failedPackageRequestNumber: index + 1
+      };
+    }
+
+    if (response.status === 429) {
+      return {
+        ok: false,
+        error: "Steam rate-limited the package-details sample (HTTP 429).",
+        completedPackageRequestCount,
+        failedPackageRequestNumber: index + 1
+      };
+    }
+    if (!response.ok || response.redirected) {
+      return {
+        ok: false,
+        error: "Steam package-details request failed (HTTP " +
+          response.status + (response.redirected ? ", redirected" : "") + ").",
+        completedPackageRequestCount,
+        failedPackageRequestNumber: index + 1
+      };
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      return {
+        ok: false,
+        error: "Steam package-details returned a non-JSON response.",
+        completedPackageRequestCount,
+        failedPackageRequestNumber: index + 1
+      };
+    }
+
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      return {
+        ok: false,
+        error: "Steam package-details returned malformed JSON.",
+        completedPackageRequestCount,
+        failedPackageRequestNumber: index + 1
+      };
+    }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return {
+        ok: false,
+        error: "Steam package-details returned an unexpected JSON shape.",
+        completedPackageRequestCount,
+        failedPackageRequestNumber: index + 1
+      };
+    }
+
+    packageResponses.set(String(packageId), payload[String(packageId)]);
+    completedPackageRequestCount += 1;
   }
 
   let resolvedPackageCount = 0;
@@ -876,7 +917,7 @@ async function probeOwnedPackageSample() {
   const sampledAppIds = new Set();
 
   for (const packageId of sample) {
-    const entry = payload[String(packageId)];
+    const entry = packageResponses.get(String(packageId));
     if (!entry || entry.success !== true || !entry.data ||
         typeof entry.data !== "object") {
       unavailablePackageCount += 1;
@@ -923,6 +964,7 @@ async function probeOwnedPackageSample() {
     uniqueValidPackageCount: packageIds.length,
     invalidPackageEntryCount,
     sampledPackageCount: sample.length,
+    completedPackageRequestCount,
     resolvedPackageCount,
     unavailablePackageCount,
     packagesWithAppsCount,
