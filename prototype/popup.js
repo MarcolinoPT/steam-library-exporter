@@ -453,7 +453,7 @@ async function runClassificationPolling(jobId, requestedCount) {
     }
 
     statusElement.textContent =
-      (progress.subject === "profile-only" ? "Classifying profile-only AppIDs: " : "Classifying Store-only AppIDs: ") +
+      (progress.subject === "profile-only" ? "Classifying profile-only AppIDs: " : progress.subject === "store-not-profile" ? "Classifying Store AppIDs absent from profile: " : "Classifying Store-only AppIDs: ") +
       progress.attemptedCount + " of " + requestedCount +
       " requests attempted; " + progress.resolvedCount +
       " classified" +
