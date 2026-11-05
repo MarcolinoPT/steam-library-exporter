@@ -1,6 +1,10 @@
 const compareButton = document.querySelector("#compare-button");
 const classifyButton = document.querySelector("#classify-button");
 const classifyNote = document.querySelector("#classify-note");
+const packageProbeButton = document.querySelector("#package-probe-button");
+const packageProbeNote = document.querySelector("#package-probe-note");
+const packageProbeElement = document.querySelector("#package-probe");
+const packageProbeResultsElement = document.querySelector("#package-probe-results");
 const statusElement = document.querySelector("#status");
 const resultsElement = document.querySelector("#results");
 const metricsElement = document.querySelector("#metrics");
@@ -159,6 +163,10 @@ compareButton.addEventListener("click", async () => {
   classifyButton.disabled = true;
   classifyButton.hidden = true;
   classifyNote.hidden = true;
+  packageProbeButton.disabled = true;
+  packageProbeButton.hidden = true;
+  packageProbeNote.hidden = true;
+  packageProbeElement.hidden = true;
   classificationElement.hidden = true;
   resultsElement.hidden = true;
   errorElement.hidden = true;
@@ -202,6 +210,11 @@ compareButton.addEventListener("click", async () => {
         classifyButton.hidden = false;
         classifyButton.disabled = false;
         classifyNote.hidden = false;
+      }
+      if (result.store.ownedPackagesCount > 0) {
+        packageProbeButton.hidden = false;
+        packageProbeButton.disabled = false;
+        packageProbeNote.hidden = false;
       }
     } else {
       statusElement.textContent =
@@ -257,6 +270,70 @@ async function runClassificationPolling(jobId, requestedCount) {
     );
   }
 }
+
+
+function appendPackageProbe(result) {
+  packageProbeResultsElement.replaceChildren();
+  appendDefinitionList(packageProbeResultsElement, [
+    ["Owned package entries in refreshed response", result.ownedPackageEntryCount],
+    ["Unique valid package IDs", result.uniqueValidPackageCount],
+    ["Invalid package entries", result.invalidPackageEntryCount],
+    ["Sample selection", result.sampleMethod],
+    ["Packages sampled", result.sampledPackageCount],
+    ["Packages resolved with app lists", result.resolvedPackageCount],
+    ["Packages unavailable / without app list", result.unavailablePackageCount],
+    ["Packages with at least one app", result.packagesWithAppsCount],
+    ["Packages with empty app lists", result.packagesWithoutAppsCount],
+    ["App relationships returned", result.appRelationshipCount],
+    ["Unique AppIDs across sample", result.uniqueAppCount],
+    ["Invalid app entries", result.invalidAppEntryCount],
+    ["Sample AppIDs also in Store-only set", result.storeOnlyAppIdsMatchedCount],
+    ["Store-only AppIDs not seen in sample", result.storeOnlyAppIdsUnmatchedCount]
+  ]);
+
+  const note = document.createElement("p");
+  note.className = "notice";
+  note.textContent =
+    "Package contents are public catalog metadata, not proof that each included app is individually entitled to this account. The sample is exploratory and does not establish coverage of all owned packages.";
+  packageProbeResultsElement.append(note);
+  packageProbeElement.hidden = false;
+}
+
+packageProbeButton.addEventListener("click", async () => {
+  compareButton.disabled = true;
+  classifyButton.disabled = true;
+  packageProbeButton.disabled = true;
+  errorElement.hidden = true;
+  packageProbeElement.hidden = true;
+  statusElement.textContent =
+    "Refreshing authenticated sources and checking a sample of owned packages…";
+
+  try {
+    const result = await browser.runtime.sendMessage({
+      type: "PROBE_PACKAGE_SAMPLE"
+    });
+
+    if (!result || !result.ok) {
+      throw new Error(
+        result?.error || "The owned package sample could not be completed."
+      );
+    }
+
+    appendPackageProbe(result);
+    statusElement.textContent =
+      "Owned package sample completed. Only aggregate results were returned.";
+  } catch (error) {
+    errorElement.textContent = error instanceof Error
+      ? error.message
+      : "An unexpected error occurred.";
+    errorElement.hidden = false;
+    statusElement.textContent = "Owned package sample failed.";
+  } finally {
+    compareButton.disabled = false;
+    classifyButton.disabled = false;
+    packageProbeButton.disabled = false;
+  }
+});
 
 classifyButton.addEventListener("click", async () => {
   compareButton.disabled = true;
