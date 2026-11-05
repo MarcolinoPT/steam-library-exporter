@@ -1,6 +1,6 @@
 # Investigation: authenticated Steam library sources
 
-**Status:** In progress  
+**Status:** Completed (initial source investigation; findings remain subject to revision)  
 **Last updated:** 2026-11-05
 
 ## Objective
@@ -193,3 +193,112 @@ Reference: [InternalSteamWebAPI — Get Package Details](https://github-wiki-see
 - Do not silently discard records.
 - Do not claim full-library completeness solely from HTTP 200, matching counts, or successful metadata lookups.
 - Keep metadata enrichment separate from authenticated library acquisition.
+
+
+## Consolidated runtime findings and conclusion
+
+The following additional experiments were completed on 2026-11-05 using the same authenticated Firefox account/container. These observations are account- and session-specific.
+
+### Three-way profile comparison
+
+The Steam Community profile All Games page displayed 326 entries. The prototype extracted 326 unique AppIDs from the current DOM, matching the displayed count.
+
+| Comparison | Count |
+|---|---:|
+| Profile All Games | 326 |
+| Community authenticated endpoint | 499 |
+| Store authenticated endpoint | 545 |
+| Present in all three | 312 |
+| Profile-only (absent from both endpoints) | 14 |
+| Community absent from profile | 187 |
+| Store absent from profile | 233 |
+
+All 14 profile-only AppIDs were successfully classified by public appdetails metadata as Steam-reported `demo`. This is a catalogue classification, not proof of account entitlement.
+
+### Store-not-profile classification (233 entries)
+
+The 233 Store AppIDs absent from the profile page were checked individually:
+
+| Steam-reported type / outcome | Count |
+|---|---:|
+| Successfully classified | 94 |
+| `dlc` | 75 |
+| `episode` | 9 |
+| `music` | 4 |
+| `game` | 3 |
+| `advertising` | 2 |
+| `series` | 1 |
+| Unavailable / no Store details | 137 |
+| Missing type | 0 |
+| Identity mismatch | 2 |
+| Request failures | 0 |
+| Not attempted | 0 |
+
+The 137 unavailable entries and two identity mismatches remain unknown. The 94 successful classifications show that this set is heterogeneous, with DLC the largest classified category. They do not establish what the unresolved entries represent or whether the account owns each catalogue item.
+
+### Store-only classification (46 entries)
+
+All 46 Store AppIDs absent from Community were checked individually:
+
+| Steam-reported type / outcome | Count |
+|---|---:|
+| Successfully classified | 2 |
+| `dlc` | 1 |
+| `game` | 1 |
+| Unavailable / no Store details | 44 |
+| Missing type | 0 |
+| Identity mismatch | 0 |
+| Request failures | 0 |
+| Not attempted | 0 |
+
+The 44 unavailable entries remain unknown. The 46-record experiment validates the incremental request/polling path for this run, but provides little catalogue coverage for the Store-only set.
+
+### Owned-package relationship sample
+
+The Store response contained 329 owned-package entries. The revised package-details probe completed 10 individually paced public requests against an evenly spaced sample:
+
+| Metric | Result |
+|---|---:|
+| Package entries | 329 |
+| Unique valid package IDs | 328 |
+| Invalid package entries | 1 |
+| Sampled packages | 10 |
+| Requests completed | 10 |
+| Packages resolved with app lists | 1 |
+| Packages unavailable / without app list | 9 |
+| Packages with at least one app | 1 |
+| App relationships returned | 1 |
+| Unique AppIDs across sample | 1 |
+| Sample AppIDs overlapping Store-only set | 0 |
+
+This sample is too small and sparse to support reconstruction of the account's entitlements from package contents. It does not establish coverage of the full package set.
+
+### Consolidated interpretation
+
+For this account and observed session:
+
+- Community returned 499 unique AppIDs; Store returned 545.
+- Every Community AppID was also present in Store; Store added 46.
+- The profile page exposed 326 AppIDs, 312 of which overlapped both authenticated sources.
+- The profile-only 14 were all reported as demos by public appdetails metadata.
+- The Store-not-profile set of 233 was heterogeneous among the 94 successfully classified records; 137 were unavailable and two had identity mismatches.
+- Of the 46 Store-only records, only two were classifiable (one DLC and one game); 44 were unavailable.
+- The 10-package sample resolved only one package app list and is not useful evidence of full package-to-entitlement coverage.
+
+These results do **not** prove that Community is complete, that Store is complete, or that their union is a complete library. They also do not prove that the profile page is an authoritative entitlement source. Public appdetails and packagedetails are catalogue metadata, not account ownership checks.
+
+### Decisions for the production design
+
+1. Keep authenticated Community, authenticated Store, and public-profile acquisition as distinct source adapters.
+2. Preserve source provenance for every record; do not silently merge away differences.
+3. Model Steam catalogue entities separately from account entitlements. An AppID or catalogue type is not itself proof of ownership.
+4. Preserve unknown/unavailable/identity-mismatch states. Never discard unresolved records or infer that they are invalid/delisted.
+5. Treat game, DLC, demo, software, tool, soundtrack, episode, music, series and other catalogue types as distinct classifications where metadata supports them. Do not assume the current observed type vocabulary is exhaustive.
+6. Keep metadata enrichment separate from authenticated library acquisition.
+7. Do not claim completeness based on HTTP success, source overlap, matching UI counts, or public metadata availability.
+
+### Investigation status
+
+The initial Firefox MV3 feasibility, source comparison, profile comparison, targeted metadata classifications, and exploratory package sample are complete for this account/session. Coverage across other accounts and the full entitlement categories listed below remains unproven. The next step is to design the production data model and export pipeline around provenance and explicit uncertainty, then add further coverage probes only when they answer a concrete design question.
+
+The findings are living documentation: update this record when new accounts, Steam behavior, runtime evidence, or implementation decisions change the conclusions.
