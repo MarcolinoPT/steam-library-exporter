@@ -1,0 +1,27 @@
+language: en-US
+tone_instructions: "Be precise, pragmatic, and security-conscious. Distinguish confirmed defects from suggestions."
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  path_filters:
+    - "!dist/**"
+    - "!coverage/**"
+  path_instructions:
+    - path: "src/**"
+      instructions: |
+        Prioritize correctness, Firefox WebExtension MV3 compatibility, minimal permissions,
+        session-secret handling, validation of undocumented Steam responses, and honest
+        reporting of incomplete library data.
+    - path: "tests/**"
+      instructions: |
+        Check meaningful edge cases, malformed responses, duplicate AppIDs, and privacy-safe fixtures.
+    - path: ".github/workflows/**"
+      instructions: |
+        Check least-privilege workflow permissions, pinned action versions where practical,
+        and safe handling of untrusted pull request code.
+chat:
+  auto_reply: true
