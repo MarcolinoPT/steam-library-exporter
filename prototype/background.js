@@ -851,6 +851,7 @@ function getClassificationProgress(job) {
     ok: true,
     jobId: job.jobId,
     requestedCount: job.appIds.length,
+    subject: job.subject || "store-only",
     attemptedCount: job.attemptedCount,
     resolvedCount: job.resolvedCount,
     unavailableCount: job.unavailableCount,
