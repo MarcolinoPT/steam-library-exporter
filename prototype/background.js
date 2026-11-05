@@ -13,7 +13,7 @@ function extractAppId(entry) {
     return entry;
   }
 
-  if (typeof entry === "string" && /^\d+$/.test(entry)) {
+  if (typeof entry === "string" && /^\\d+$/.test(entry)) {
     return Number(entry);
   }
 
@@ -22,7 +22,7 @@ function extractAppId(entry) {
     if (typeof candidate === "number") {
       return candidate;
     }
-    if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
+    if (typeof candidate === "string" && /^\\d+$/.test(candidate)) {
       return Number(candidate);
     }
   }
@@ -110,7 +110,7 @@ async function fetchJsonEndpoint(endpoint, sourceName) {
 
   if (response.status === 401 || response.status === 403) {
     throw new Error(
-      sourceName + ": Steam rejected the request (HTTP " + response.status + "). Sign in to Steam and try again."
+      sourceName + ": Steam rejected the request (HTTP " + response.status + ")."
     );
   }
 
@@ -123,7 +123,7 @@ async function fetchJsonEndpoint(endpoint, sourceName) {
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.toLowerCase().includes("application/json")) {
     throw new Error(
-      sourceName + ": expected JSON but received a different content type. You may need to sign in again."
+      sourceName + ": expected JSON but received a different content type."
     );
   }
 
@@ -137,9 +137,35 @@ async function fetchJsonEndpoint(endpoint, sourceName) {
   return payload;
 }
 
+async function getCommunitySessionId() {
+  let cookie;
+  try {
+    cookie = await browser.cookies.get({
+      url: COMMUNITY_ENDPOINT,
+      name: "sessionid"
+    });
+  } catch {
+    throw new Error(
+      "Steam Community: Firefox could not read the sessionid cookie. Check the extension cookie permission and Steam sign-in."
+    );
+  }
+
+  if (!cookie || typeof cookie.value !== "string" || cookie.value.length === 0) {
+    throw new Error(
+      "Steam Community: no sessionid cookie was available for this profile. Open Steam Community, sign in, and retry."
+    );
+  }
+
+  return cookie.value;
+}
+
 async function fetchCommunitySource() {
+  const sessionId = await getCommunitySessionId();
+  const endpoint = new URL(COMMUNITY_ENDPOINT);
+  endpoint.searchParams.set("sessionid", sessionId);
+
   const payload = await fetchJsonEndpoint(
-    COMMUNITY_ENDPOINT,
+    endpoint.toString(),
     "Steam Community"
   );
 
@@ -160,12 +186,21 @@ async function fetchStoreSource() {
   }
 
   if (!Array.isArray(payload.rgOwnedApps)) {
+    const keys = Object.keys(payload).sort();
     throw new Error(
-      "Steam Store: rgOwnedApps was missing or was not an array."
+      "Steam Store: rgOwnedApps was missing or was not an array. Response keys: " +
+      keys.join(", ")
     );
   }
 
-  return normalizeAppIds(payload.rgOwnedApps);
+  const normalized = normalizeAppIds(payload.rgOwnedApps);
+  return {
+    ...normalized,
+    responseKeys: Object.keys(payload).sort(),
+    ownedPackagesCount: Array.isArray(payload.rgOwnedPackages)
+      ? payload.rgOwnedPackages.length
+      : null
+  };
 }
 
 async function captureSource(fetchSource) {
@@ -176,6 +211,8 @@ async function captureSource(fetchSource) {
       rawEntryCount: source.rawEntryCount,
       uniqueAppCount: source.uniqueAppCount,
       invalidEntryCount: source.invalidEntryCount,
+      responseKeys: source.responseKeys ?? null,
+      ownedPackagesCount: source.ownedPackagesCount ?? null,
       appIds: source.appIds
     };
   } catch (error) {
@@ -213,7 +250,9 @@ browser.runtime.onMessage.addListener(async (message) => {
           ok: true,
           rawEntryCount: store.rawEntryCount,
           uniqueAppCount: store.uniqueAppCount,
-          invalidEntryCount: store.invalidEntryCount
+          invalidEntryCount: store.invalidEntryCount,
+          responseKeys: store.responseKeys,
+          ownedPackagesCount: store.ownedPackagesCount
         }
       : store,
     metrics: community.ok && store.ok
