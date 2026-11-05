@@ -483,7 +483,7 @@ async function compareVisibleProfileGames() {
       try {
         const url = new URL(tab.url);
         return url.hostname === "steamcommunity.com" &&
-          /^\\/(?:id|profiles)\\/[^/]+\\/games\\/?$/.test(url.pathname);
+          /^\/(?:id|profiles)\/[^/]+\/games\/?$/.test(url.pathname);
       } catch {
         return false;
       }
@@ -539,7 +539,7 @@ async function compareVisibleProfileGames() {
         const add = (value) => {
           if (typeof value !== "string" && typeof value !== "number") return;
           const text = String(value);
-          if (!/^\\d+$/.test(text)) return;
+          if (!/^\d+$/.test(text)) return;
           const id = Number(text);
           if (Number.isSafeInteger(id) && id > 0) appIds.add(id);
         };
@@ -548,13 +548,13 @@ async function compareVisibleProfileGames() {
           add(element.getAttribute("data-appid"));
         }
         for (const link of document.querySelectorAll('a[href*="/app/"]')) {
-          const match = link.href.match(/\\/app\\/(\\d+)(?:\\/|$|[?#])/);
+          const match = link.href.match(/\/app\/(\d+)(?:\/|$|[?#])/);
           if (match) add(match[1]);
         }
 
         let reportedCount = null;
         for (const element of document.querySelectorAll("a, span, div")) {
-          const match = (element.textContent || "").trim().match(/^All Games\\s*\\(([\\d,]+)\\)$/);
+          const match = (element.textContent || "").trim().match(/^All Games\s*\(([\d,]+)\)$/);
           if (match) {
             reportedCount = Number(match[1].replace(/,/g, ""));
             break;
