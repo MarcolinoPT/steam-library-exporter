@@ -119,6 +119,16 @@ The successful run validates the incremental message/polling flow for this accou
 
 Reference: [InternalSteamWebAPI — Get App Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-App-Details).
 
+## Steam Community profile Games page comparison
+
+The user's Steam Community profile page at `/id/<profile>/games/?tab=all` displays an **All Games** count of 326 in the observed session. This is a third reference point, distinct from the authenticated Community and Store endpoint results. The count is a UI presentation count; it should not be assumed to have the same inclusion rules as either endpoint.
+
+The prototype now has a separate profile-page comparison action. It requires an already-open profile Games page in the selected authenticated Firefox container, in addition to the existing Community and Store tabs. It inspects the current DOM in place, collecting AppIDs from `data-appid` attributes and app links. It also attempts to read Steam's displayed All Games count. The extracted IDs are compared in memory with freshly queried Community and Store sets; only aggregate overlap/difference counts are returned to the popup.
+
+The implementation does not scroll, reload, navigate, open, activate, or otherwise modify tabs. It does not return or persist AppIDs or names. Because the page may render only a subset of the full list in the current DOM, the comparison reports the displayed count separately from the extracted unique AppID count. A mismatch means the page extraction is partial and must not be treated as a complete profile set.
+
+**Runtime validation pending:** test whether the currently loaded page DOM contains all 326 AppIDs, and then inspect the three-way overlap. If fewer than 326 IDs are extracted, investigate Steam's page rendering/lazy-loading behavior before drawing coverage conclusions. Do not add automated scrolling without a separate decision.
+
 ## Owned-package relationship probe
 
 A separate prototype action now tests the public Store package-details endpoint against a small sample of the account's `rgOwnedPackages` entries.
