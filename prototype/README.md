@@ -13,20 +13,20 @@ Use a Firefox profile where you are already signed in to both Steam Community an
 
 ## Permissions
 
-The prototype requests host access only for:
+The prototype requests:
 
-- `https://steamcommunity.com/*`
-- `https://store.steampowered.com/*`
+- `cookies` permission, used only to read the `sessionid` cookie for `steamcommunity.com`.
+- Host access only for `https://steamcommunity.com/*` and `https://store.steampowered.com/*`.
 
-It does not request the cookies API, broad URL access, tabs, storage, or content-script permissions. Requests run in the Firefox MV3 background context with `credentials: "include"`.
+It does not request broad URL access, tabs, storage, or content-script permissions. Requests run in the Firefox MV3 background context with `credentials: "include"`.
 
-The Community endpoint is initially queried without a session ID parameter. If Steam requires that parameter, record the failure first; do not add cookie access or copy session material without a separate security review.
+The Community session ID is retrieved in memory and added only to the Community endpoint request. It is never returned to the popup, logged, persisted, or sent to the Store endpoint or any third party. If the cookie is unavailable, the Community request fails with a generic diagnostic.
 
 ## Data handling
 
-- Response bodies are parsed in memory only.
+- Response bodies and the session ID are handled in memory only.
 - AppIDs are normalized to positive safe integers.
-- Only aggregate counts are returned to the popup.
+- Only aggregate counts and non-sensitive Store response-shape metadata (top-level keys and owned-package count) are returned to the popup.
 - Raw records, cookies, and session material are never logged or persisted.
 - No requests are sent to any destination other than the two Steam origins.
 
