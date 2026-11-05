@@ -456,6 +456,174 @@ async function compareSources() {
 }
 
 
+async function compareVisibleProfileGames() {
+  const cookieDiagnostics = await getSafeCookieDiagnostics();
+  let selected;
+  try {
+    selected = await chooseAuthenticatedStore(cookieDiagnostics);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error
+        ? error.message
+        : "Could not select an authenticated Firefox container."
+    };
+  }
+
+  const communityTab = findExistingSteamTab(
+    selected.tabs, selected.storeId, "steamcommunity.com"
+  );
+  const storeTab = findExistingSteamTab(
+    selected.tabs, selected.storeId, "store.steampowered.com"
+  );
+  const profileTab = selected.tabs
+    .filter((tab) => {
+      if (tab.cookieStoreId !== selected.storeId ||
+          typeof tab.url !== "string") return false;
+      try {
+        const url = new URL(tab.url);
+        return url.hostname === "steamcommunity.com" &&
+          /^\\/(?:id|profiles)\\/[^/]+\\/games\\/?$/.test(url.pathname);
+      } catch {
+        return false;
+      }
+    })
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0] ?? null;
+
+  if (!communityTab || !storeTab || !profileTab) {
+    return {
+      ok: false,
+      error: "Open the Steam Community profile Games page, plus Steam Community and Steam Store tabs, in the same authenticated Firefox container. The extension will not open or navigate tabs."
+    };
+  }
+
+  let communityPayload;
+  let storePayload;
+  try {
+    const sessionId = await getCommunitySessionId(selected.storeId);
+    [communityPayload, storePayload] = await Promise.all([
+      executeSteamRequest(communityTab.id, COMMUNITY_ENDPOINT, sessionId),
+      executeSteamRequest(storeTab.id, STORE_ENDPOINT)
+    ]);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error
+        ? error.message
+        : "Could not refresh the authenticated Steam sources."
+    };
+  }
+
+  if (!Array.isArray(communityPayload) ||
+      !storePayload || typeof storePayload !== "object" ||
+      Array.isArray(storePayload) ||
+      !Array.isArray(storePayload.rgOwnedApps)) {
+    return { ok: false, error: "Steam returned an unexpected library response shape." };
+  }
+
+  let community;
+  let store;
+  try {
+    community = normalizeAppIds(communityPayload);
+    store = normalizeAppIds(storePayload.rgOwnedApps);
+  } catch {
+    return { ok: false, error: "Could not normalize the refreshed Steam library entries." };
+  }
+
+  let pageResults;
+  try {
+    pageResults = await browser.scripting.executeScript({
+      target: { tabId: profileTab.id },
+      func: () => {
+        const appIds = new Set();
+        const add = (value) => {
+          if (typeof value !== "string" && typeof value !== "number") return;
+          const text = String(value);
+          if (!/^\\d+$/.test(text)) return;
+          const id = Number(text);
+          if (Number.isSafeInteger(id) && id > 0) appIds.add(id);
+        };
+
+        for (const element of document.querySelectorAll("[data-appid]")) {
+          add(element.getAttribute("data-appid"));
+        }
+        for (const link of document.querySelectorAll('a[href*="/app/"]')) {
+          const match = link.href.match(/\\/app\\/(\\d+)(?:\\/|$|[?#])/);
+          if (match) add(match[1]);
+        }
+
+        let reportedCount = null;
+        for (const element of document.querySelectorAll("a, span, div")) {
+          const match = (element.textContent || "").trim().match(/^All Games\\s*\\(([\\d,]+)\\)$/);
+          if (match) {
+            reportedCount = Number(match[1].replace(/,/g, ""));
+            break;
+          }
+        }
+
+        return {
+          appIds: [...appIds],
+          reportedCount,
+          renderedGameRowCount: document.querySelectorAll(".gameListRow").length
+        };
+      }
+    });
+  } catch {
+    return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
+  }
+
+  const mainFrame = pageResults.find((result) => result.frameId === 0);
+  const pageData = mainFrame?.result;
+  if (!pageData || !Array.isArray(pageData.appIds)) {
+    return { ok: false, error: "The profile Games page did not expose a readable AppID list." };
+  }
+
+  const profileIds = new Set(pageData.appIds.filter(isPositiveAppId));
+  let communityOverlap = 0;
+  let storeOverlap = 0;
+  let allThree = 0;
+  let profileOnlyCommunity = 0;
+  let profileOnlyStore = 0;
+  for (const appId of profileIds) {
+    const inCommunity = community.appIds.has(appId);
+    const inStore = store.appIds.has(appId);
+    if (inCommunity) communityOverlap += 1;
+    if (inStore) storeOverlap += 1;
+    if (inCommunity && inStore) allThree += 1;
+    if (!inCommunity) profileOnlyCommunity += 1;
+    if (!inStore) profileOnlyStore += 1;
+  }
+
+  let communityNotOnProfile = 0;
+  for (const appId of community.appIds) {
+    if (!profileIds.has(appId)) communityNotOnProfile += 1;
+  }
+  let storeNotOnProfile = 0;
+  for (const appId of store.appIds) {
+    if (!profileIds.has(appId)) storeNotOnProfile += 1;
+  }
+
+  return {
+    ok: true,
+    profileReportedCount: Number.isSafeInteger(pageData.reportedCount)
+      ? pageData.reportedCount : null,
+    profileRenderedGameRowCount: pageData.renderedGameRowCount,
+    profileExtractedUniqueAppCount: profileIds.size,
+    communityUniqueAppCount: community.uniqueAppCount,
+    storeUniqueAppCount: store.uniqueAppCount,
+    profileCommunityOverlapCount: communityOverlap,
+    profileStoreOverlapCount: storeOverlap,
+    allThreeOverlapCount: allThree,
+    profileOnlyCommunityCount: profileOnlyCommunity,
+    profileOnlyStoreCount: profileOnlyStore,
+    communityNotOnProfileCount: communityNotOnProfile,
+    storeNotOnProfileCount: storeNotOnProfile,
+    profileExtractionMatchesReportedCount:
+      pageData.reportedCount === null ? null : profileIds.size === pageData.reportedCount
+  };
+}
+
+
 let activeClassificationJob = null;
 let nextClassificationJobId = 1;
 
@@ -981,6 +1149,10 @@ async function probeOwnedPackageSample() {
 browser.runtime.onMessage.addListener((message) => {
   if (!message) {
     return undefined;
+  }
+
+  if (message.type === "COMPARE_VISIBLE_PROFILE_GAMES") {
+    return compareVisibleProfileGames();
   }
 
   if (message.type === "COMPARE_SOURCES") {
