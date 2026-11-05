@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Steam Library Comparator</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>Steam Library Comparator</h1>
+      <p class="notice">
+        Temporary diagnostic. Only aggregate counts are displayed.
+        Raw library entries are kept in memory for comparison and discarded.
+      </p>
+      <button id="compare-button" type="button">Compare my Steam sources</button>
+      <button id="classify-button" type="button" hidden>
+        Classify Store-only AppIDs
+      </button>
+      <p id="classify-note" class="notice" hidden>
+        This refreshes both sources, then checks public Steam metadata one AppID
+        per short background message. Progress is shown here; keep this popup
+        open until the run finishes. AppIDs and application names are never
+        displayed.
+      </p>
+      <button id="profile-compare-button" type="button">
+        Compare profile Games page (All Games)
+      </button>
+      <p id="profile-compare-note" class="notice">
+        Reads AppIDs from an already-open Steam Community profile Games page
+        in the selected container and compares aggregate overlap with the
+        authenticated endpoints. The page is not navigated or modified.
+      </p>
+      <button id="classify-profile-only-button" type="button" hidden>
+        Inspect profile-only AppIDs
+      </button>
+      <p id="classify-profile-only-note" class="notice" hidden>
+        Checks public Steam appdetails metadata one AppID at a time, with
+        conservative pacing. Only aggregate classifications are displayed.
+      </p>
+      <section id="profile-only-classification" hidden aria-label="Profile-only metadata classification">
+        <h2>Profile-only metadata classification</h2>
+        <div id="profile-only-classification-results"></div>
+      </section>
+      <button id="classify-store-not-profile-button" type="button" hidden>
+        Classify Store AppIDs absent from profile
+      </button>
+      <p id="classify-store-not-profile-note" class="notice" hidden>
+        Checks public appdetails metadata one AppID every two seconds. A full run
+        of around 233 entries may take about eight minutes. Keep the popup open.
+      </p>
+      <section id="store-not-profile-classification" hidden aria-label="Store not on profile metadata classification">
+        <h2>Store AppIDs absent from profile</h2>
+        <div id="store-not-profile-classification-results"></div>
+      </section>
+      <section id="profile-comparison" hidden aria-label="Profile Games page comparison">
+        <h2>Profile Games page comparison</h2>
+        <div id="profile-comparison-results"></div>
+      </section>
+      <button id="package-probe-button" type="button" hidden>
+        Probe owned package sample (10)
+      </button>
+      <p id="package-probe-note" class="notice" hidden>
+        Refreshes both sources, then checks a sample of up to 10 evenly spaced
+        owned package IDs against public Steam package details. Only aggregate
+        counts are displayed; no package IDs, app IDs or names are shown.
+      </p>
+      <p id="status" role="status" aria-live="polite">Ready.</p>
+      <section id="results" hidden aria-label="Comparison results">
+        <h2>AppID comparison</h2>
+        <div id="metrics"></div>
+      </section>
+      <section id="classification" hidden aria-label="Store-only classification">
+        <h2>Store-only metadata classification</h2>
+        <div id="classification-results"></div>
+      </section>
+      <section id="package-probe" hidden aria-label="Owned package sample">
+        <h2>Owned package sample</h2>
+        <div id="package-probe-results"></div>
+      </section>
+      <p id="error" class="error" role="alert" hidden></p>
+      <p class="footnote">
+        This experiment does not establish that either source is complete.
+        Steam Store appdetails metadata is undocumented and may change.
+      </p>
+    </main>
+  </body>
+</html>

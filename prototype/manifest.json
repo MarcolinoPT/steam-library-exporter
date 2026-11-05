@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Steam Library Source Comparator (Investigation)",
+  "version": "0.2.0",
+  "description": "Temporary diagnostic prototype for comparing Steam library sources and classifying Store-only AppIDs.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "steam-library-source-comparator@local.invalid",
+      "strict_min_version": "128.0"
+    }
+  },
+  "permissions": ["cookies", "scripting"],
+  "host_permissions": [
+    "https://steamcommunity.com/*",
+    "https://store.steampowered.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "action": {
+    "default_title": "Compare Steam library sources",
+    "default_popup": "popup.html"
+  }
+}
