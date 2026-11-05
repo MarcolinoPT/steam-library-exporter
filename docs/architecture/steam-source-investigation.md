@@ -127,7 +127,7 @@ The probe:
 - Refreshes Community and Store library responses from the existing authenticated tabs in the selected Firefox container.
 - Computes the Store-only AppID set in memory.
 - Extracts valid package IDs from `rgOwnedPackages`, deduplicates them, and chooses up to 10 evenly spaced entries from the returned order.
-- Sends one unauthenticated request to `/api/packagedetails/` using the sampled package IDs in the `packageids` query parameter.
+- Sends one unauthenticated `/api/packagedetails/` request per sampled package ID, sequentially, with a two-second delay between requests. The first network, HTTP, content-type, or JSON-shape failure stops the sample and reports aggregate request progress only.
 - Inspects only response success state and the `data.apps[].id` relationships.
 - Returns aggregate counts only, including sample AppID overlap with the Store-only set. No package IDs, AppIDs, names, or raw metadata are returned or persisted.
 
@@ -135,7 +135,7 @@ The package-details endpoint is undocumented by Valve. Community-maintained docu
 
 **Interpretation guardrail:** a package's catalog app list describes what the package contains; it does not prove that every listed app is individually entitled to the account. A 10-package sample can indicate whether this mapping is useful, but cannot establish coverage of all 329 owned packages or explain all 46 Store-only AppIDs.
 
-**Status:** implementation added; awaiting user runtime validation.
+**Runtime update:** the initial batched request failed with HTTP 400. The probe has been changed to request one package ID per request, sequentially, with conservative pacing. Runtime validation of this revised approach is pending.
 
 Reference: [InternalSteamWebAPI — Get Package Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-Package-Details).
 
