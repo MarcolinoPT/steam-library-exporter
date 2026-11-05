@@ -84,11 +84,14 @@ compareButton.addEventListener("click", async () => {
 
       const cookieDetail = document.createElement("p");
       const diagnostics = result.cookieDiagnostics;
+      const describeCookies = (cookies) =>
+        Object.entries(cookies)
+          .map(([name, present]) => name + " " + (present ? "present" : "absent"))
+          .join("; ");
+
       cookieDetail.textContent =
-        "Community: sessionid " + (diagnostics.communitySessionIdPresent ? "present" : "absent") +
-        "; steamLoginSecure " + (diagnostics.communityLoginCookiePresent ? "present" : "absent") +
-        ". Store: sessionid " + (diagnostics.storeSessionIdPresent ? "present" : "absent") +
-        "; steamLoginSecure " + (diagnostics.storeLoginCookiePresent ? "present" : "absent") + ".";
+        "Community: " + describeCookies(diagnostics.community) +
+        ". Store: " + describeCookies(diagnostics.store) + ".";
       cookieDetail.className = "diagnostic";
       metricsElement.append(cookieDetail);
     }
