@@ -9,7 +9,7 @@
       "strict_min_version": "128.0"
     }
   },
-  "permissions": [],
+  "permissions": ["cookies"],
   "host_permissions": [
     "https://steamcommunity.com/*",
     "https://store.steampowered.com/*"
