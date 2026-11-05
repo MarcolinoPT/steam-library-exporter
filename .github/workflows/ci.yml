@@ -26,7 +26,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate repository foundation
+        run: |
+          test -f README.md
+          test -f SECURITY.md
+          test -f CONTRIBUTING.md
+          test -d docs/architecture
+
+      - name: Detect Node project
+        id: node-project
+        run: |
+          if [ -f package.json ] && [ -f package-lock.json ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node.js
+        if: steps.node-project.outputs.available == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -34,19 +51,25 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
+        if: steps.node-project.outputs.available == 'true'
         run: npm ci
 
       - name: Lint
+        if: steps.node-project.outputs.available == 'true'
         run: npm run lint
 
       - name: Typecheck
+        if: steps.node-project.outputs.available == 'true'
         run: npm run typecheck
 
       - name: Unit tests
+        if: steps.node-project.outputs.available == 'true'
         run: npm test -- --run
 
       - name: Build
+        if: steps.node-project.outputs.available == 'true'
         run: npm run build
 
       - name: Validate extension manifest
+        if: steps.node-project.outputs.available == 'true'
         run: npm run lint:extension
