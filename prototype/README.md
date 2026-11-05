@@ -125,3 +125,35 @@ The incremental Store-only metadata classifier was subsequently tested successfu
 A successful JSON response confirms only that the endpoint returned a parseable response in this browser context. It does not prove that the response is complete or that every returned AppID is a game.
 
 The comparator reports unique AppID counts, overlap, source-only counts, union count, and invalid-entry counts. It does not select a canonical source or merge sources into a production library.
+
+
+## Additional runtime results (2026-11-05)
+
+The profile comparison and follow-up classifiers were also exercised successfully in the same authenticated account/container.
+
+Profile Games page:
+- Steam All Games count: 326
+- Unique AppIDs extracted from the current DOM: 326 (matching the displayed count)
+- In both authenticated sources: 312
+- Profile-only: 14; all 14 returned Steam-reported type `demo` from public appdetails metadata
+- Community absent from profile: 187
+- Store absent from profile: 233
+
+Store-not-profile classification (233):
+- 94 successfully classified: 75 `dlc`, 9 `episode`, 4 `music`, 3 `game`, 2 `advertising`, 1 `series`
+- 137 unavailable/no Store details
+- 2 identity mismatches
+- 0 missing type, request failures, or unattempted entries
+
+Store-only classification (46):
+- 2 successfully classified: 1 `dlc`, 1 `game`
+- 44 unavailable/no Store details
+- 0 missing type, identity mismatches, request failures, or unattempted entries
+
+Owned-package sample:
+- 329 package entries; 328 unique valid package IDs; 1 invalid entry
+- 10 sampled requests completed
+- 1 package returned an app list; 9 were unavailable/without an app list
+- 1 app relationship / 1 unique AppID; no overlap with the Store-only set
+
+These remain account-specific observations. Unavailable metadata is unknown, not evidence of invalidity or lack of entitlement. Public appdetails and packagedetails describe catalogue information, not account ownership. The package sample does not establish full package coverage.
