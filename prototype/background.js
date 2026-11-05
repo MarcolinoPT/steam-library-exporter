@@ -703,8 +703,12 @@ browser.runtime.onMessage.addListener((message) => {
     return compareSources();
   }
 
-  if (message.type === "CLASSIFY_STORE_ONLY") {
-    return classifyStoreOnlyApps();
+  if (message.type === "START_CLASSIFICATION") {
+    return startStoreOnlyClassification();
+  }
+
+  if (message.type === "POLL_CLASSIFICATION") {
+    return pollStoreOnlyClassification(message.jobId);
   }
 
   return undefined;
