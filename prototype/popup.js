@@ -134,6 +134,7 @@ function appendClassification(result) {
     ["Missing type field", result.missingTypeCount],
     ["Identity mismatch", result.identityMismatchCount],
     ["Request failures", result.requestFailureCount],
+    ...(result.stopReason ? [["Stopped early", result.stopReason]] : []),
     ["Not attempted", result.notAttemptedCount]
   ]);
 
@@ -142,6 +143,9 @@ function appendClassification(result) {
   if (result.rateLimited) {
     note.textContent =
       "Steam rate-limited the metadata requests. The remaining entries were not attempted; wait before retrying.";
+  } else if (result.stopReason) {
+    note.textContent =
+      "The metadata run stopped after a request failure. The remaining entries were not attempted; review the stop reason before retrying.";
   } else {
     note.textContent =
       "Only aggregate type counts are shown. Application IDs, names and raw metadata are discarded after classification.";
