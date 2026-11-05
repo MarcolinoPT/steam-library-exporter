@@ -220,29 +220,91 @@ compareButton.addEventListener("click", async () => {
   }
 });
 
+async function waitForNextPoll(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function runClassificationPolling(jobId, requestedCount) {
+  let progress;
+  while (true) {
+    progress = await browser.runtime.sendMessage({
+      type: "POLL_CLASSIFICATION",
+      jobId
+    });
+
+    if (!progress || !progress.ok) {
+      throw new Error(
+        progress?.error ||
+        "The classification progress message could not be completed."
+      );
+    }
+
+    statusElement.textContent =
+      "Classifying Store-only AppIDs: " +
+      progress.attemptedCount + " of " + requestedCount +
+      " requests attempted; " + progress.resolvedCount +
+      " classified" +
+      (progress.waitingForPacing ? " (respecting request delay)…" : "…");
+
+    if (progress.done) {
+      return progress;
+    }
+
+    await waitForNextPoll(
+      progress.waitingForPacing
+        ? Math.max(500, (progress.retryAfterMs || 2000) + 150)
+        : 500
+    );
+  }
+}
+
 classifyButton.addEventListener("click", async () => {
   compareButton.disabled = true;
   classifyButton.disabled = true;
   errorElement.hidden = true;
   classificationElement.hidden = true;
   statusElement.textContent =
-    "Refreshing the source sets, then checking Store metadata one AppID at a time. Please keep this popup open…";
+    "Refreshing the source sets and starting incremental metadata classification…";
 
   try {
-    const result = await browser.runtime.sendMessage({
-      type: "CLASSIFY_STORE_ONLY"
+    const started = await browser.runtime.sendMessage({
+      type: "START_CLASSIFICATION"
     });
 
-    if (!result || !result.ok) {
+    if (!started || !started.ok) {
       throw new Error(
-        result?.error || "Store-only classification could not be completed."
+        started?.error || "Store-only classification could not be started."
       );
     }
 
+    if (started.done) {
+      appendClassification({
+        requestedCount: 0,
+        attemptedCount: 0,
+        resolvedCount: 0,
+        typeCounts: {},
+        unavailableCount: 0,
+        missingTypeCount: 0,
+        identityMismatchCount: 0,
+        requestFailureCount: 0,
+        rateLimited: false,
+        notAttemptedCount: 0
+      });
+      statusElement.textContent = "No Store-only AppIDs need classification.";
+      return;
+    }
+
+    const result = await runClassificationPolling(
+      started.jobId,
+      started.requestedCount
+    );
+
     appendClassification(result);
     statusElement.textContent = result.rateLimited
-      ? "Classification stopped early because Steam rate-limited the requests."
-      : "Store-only metadata classification completed.";
+      ? "Classification stopped because Steam rate-limited the requests."
+      : result.stopReason
+        ? "Classification stopped after a metadata request failure."
+        : "Store-only metadata classification completed.";
   } catch (error) {
     errorElement.textContent = error instanceof Error
       ? error.message
