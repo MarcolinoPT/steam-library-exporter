@@ -13,7 +13,7 @@ function extractAppId(entry) {
     return entry;
   }
 
-  if (typeof entry === "string" && /^\\d+$/.test(entry)) {
+  if (typeof entry === "string" && /^\d+$/.test(entry)) {
     return Number(entry);
   }
 
@@ -22,7 +22,7 @@ function extractAppId(entry) {
     if (typeof candidate === "number") {
       return candidate;
     }
-    if (typeof candidate === "string" && /^\\d+$/.test(candidate)) {
+    if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
       return Number(candidate);
     }
   }
