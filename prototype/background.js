@@ -846,6 +846,113 @@ async function startProfileOnlyClassification() {
   return { ok: true, jobId, requestedCount: candidates.length, done: activeClassificationJob.done };
 }
 
+
+async function startStoreNotProfileClassification() {
+  const cookieDiagnostics = await getSafeCookieDiagnostics();
+  let selected;
+  try {
+    selected = await chooseAuthenticatedStore(cookieDiagnostics);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not select an authenticated Firefox container." };
+  }
+
+  const communityTab = findExistingSteamTab(selected.tabs, selected.storeId, "steamcommunity.com");
+  const storeTab = findExistingSteamTab(selected.tabs, selected.storeId, "store.steampowered.com");
+  const profileTab = selected.tabs
+    .filter((tab) => {
+      if (tab.cookieStoreId !== selected.storeId || typeof tab.url !== "string") return false;
+      try {
+        const url = new URL(tab.url);
+        return url.hostname === "steamcommunity.com" &&
+          /^\/(?:id|profiles)\/[^/]+\/games\/?$/.test(url.pathname);
+      } catch {
+        return false;
+      }
+    })
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0] ?? null;
+
+  if (!communityTab || !storeTab || !profileTab) {
+    return { ok: false, error: "Keep the profile Games page and both Steam source tabs open in the same authenticated container. No tabs will be opened or navigated." };
+  }
+
+  let communityPayload;
+  let storePayload;
+  try {
+    const sessionId = await getCommunitySessionId(selected.storeId);
+    [communityPayload, storePayload] = await Promise.all([
+      executeSteamRequest(communityTab.id, COMMUNITY_ENDPOINT, sessionId),
+      executeSteamRequest(storeTab.id, STORE_ENDPOINT)
+    ]);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not refresh authenticated Steam sources." };
+  }
+
+  if (!Array.isArray(communityPayload) || !storePayload ||
+      typeof storePayload !== "object" || Array.isArray(storePayload) ||
+      !Array.isArray(storePayload.rgOwnedApps)) {
+    return { ok: false, error: "Steam returned an unexpected library response shape." };
+  }
+
+  let store;
+  try {
+    store = normalizeAppIds(storePayload.rgOwnedApps);
+  } catch {
+    return { ok: false, error: "Could not normalize refreshed Store entries." };
+  }
+
+  let pageResults;
+  try {
+    pageResults = await browser.scripting.executeScript({
+      target: { tabId: profileTab.id },
+      func: () => {
+        const ids = new Set();
+        const add = (value) => {
+          if (typeof value !== "string" && typeof value !== "number") return;
+          const text = String(value);
+          if (!/^\d+$/.test(text)) return;
+          const id = Number(text);
+          if (Number.isSafeInteger(id) && id > 0) ids.add(id);
+        };
+        for (const element of document.querySelectorAll("[data-appid]")) add(element.getAttribute("data-appid"));
+        for (const link of document.querySelectorAll('a[href*="/app/"]')) {
+          const match = link.href.match(/\/app\/(\d+)(?:\/|$|[?#])/);
+          if (match) add(match[1]);
+        }
+        return [...ids];
+      }
+    });
+  } catch {
+    return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
+  }
+
+  const pageIds = pageResults.find((result) => result.frameId === 0)?.result;
+  if (!Array.isArray(pageIds)) {
+    return { ok: false, error: "The profile Games page did not expose a readable AppID list." };
+  }
+
+  const profileIds = new Set(pageIds.filter(isPositiveAppId));
+  const candidates = [...store.appIds].filter((appId) => !profileIds.has(appId));
+  const jobId = String(nextClassificationJobId++);
+  activeClassificationJob = {
+    jobId,
+    appIds: candidates,
+    nextIndex: 0,
+    lastRequestAt: 0,
+    attemptedCount: 0,
+    resolvedCount: 0,
+    unavailableCount: 0,
+    missingTypeCount: 0,
+    identityMismatchCount: 0,
+    requestFailureCount: 0,
+    rateLimited: false,
+    stopReason: null,
+    typeCounts: new Map(),
+    done: candidates.length === 0,
+    subject: "store-not-profile"
+  };
+  return { ok: true, jobId, requestedCount: candidates.length, done: activeClassificationJob.done };
+}
+
 function getClassificationProgress(job) {
   return {
     ok: true,
@@ -1271,6 +1378,10 @@ browser.runtime.onMessage.addListener((message) => {
 
   if (message.type === "COMPARE_SOURCES") {
     return compareSources();
+  }
+
+  if (message.type === "START_STORE_NOT_PROFILE_CLASSIFICATION") {
+    return startStoreNotProfileClassification();
   }
 
   if (message.type === "START_PROFILE_ONLY_CLASSIFICATION") {
