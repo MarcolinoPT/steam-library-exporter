@@ -39,7 +39,7 @@ button:disabled {
   min-height: 21px;
 }
 
-#metrics {
+#metrics dl {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px 12px;
