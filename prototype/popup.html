@@ -24,6 +24,14 @@
         open until the run finishes. AppIDs and application names are never
         displayed.
       </p>
+      <button id="package-probe-button" type="button" hidden>
+        Probe owned package sample (10)
+      </button>
+      <p id="package-probe-note" class="notice" hidden>
+        Refreshes both sources, then checks a sample of up to 10 evenly spaced
+        owned package IDs against public Steam package details. Only aggregate
+        counts are displayed; no package IDs, app IDs or names are shown.
+      </p>
       <p id="status" role="status" aria-live="polite">Ready.</p>
       <section id="results" hidden aria-label="Comparison results">
         <h2>AppID comparison</h2>
@@ -32,6 +40,10 @@
       <section id="classification" hidden aria-label="Store-only classification">
         <h2>Store-only metadata classification</h2>
         <div id="classification-results"></div>
+      </section>
+      <section id="package-probe" hidden aria-label="Owned package sample">
+        <h2>Owned package sample</h2>
+        <div id="package-probe-results"></div>
       </section>
       <p id="error" class="error" role="alert" hidden></p>
       <p class="footnote">
