@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Steam Library Source Comparator (Investigation)",
-  "version": "0.1.0",
-  "description": "Temporary diagnostic prototype for comparing authenticated Steam library sources.",
+  "version": "0.2.0",
+  "description": "Temporary diagnostic prototype for comparing Steam library sources and classifying Store-only AppIDs.",
   "browser_specific_settings": {
     "gecko": {
       "id": "steam-library-source-comparator@local.invalid",
