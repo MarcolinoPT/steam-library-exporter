@@ -314,9 +314,15 @@ packageProbeButton.addEventListener("click", async () => {
     });
 
     if (!result || !result.ok) {
-      throw new Error(
-        result?.error || "The owned package sample could not be completed."
-      );
+      const detail = result?.error ||
+        "The owned package sample could not be completed.";
+      const progress = Number.isInteger(result?.completedPackageRequestCount)
+        ? " Completed requests: " + result.completedPackageRequestCount + "." +
+          (Number.isInteger(result.failedPackageRequestNumber)
+            ? " Failed request number: " + result.failedPackageRequestNumber + "."
+            : "")
+        : "";
+      throw new Error(detail + progress);
     }
 
     appendPackageProbe(result);
