@@ -44,10 +44,11 @@ Selecting it:
 3. Requests public Steam Store `/api/appdetails/` metadata for each Store-only AppID, one ID per request.
 4. Reads only the `data.type` field and returns aggregate counts by Steam-reported type.
 
-The metadata requests execute in the existing Steam Store tab and use `credentials: "omit"`; Steam login cookies are not sent with them. They do not contact any third party. AppIDs, application names, full metadata responses, and the Store-only set are never returned to the popup, logged, or persisted.
+The metadata requests execute from the extension background context with `credentials: "omit"`; Steam login cookies are not sent. They do not need an open Steam tab after the authenticated source refresh completes. AppIDs, application names, full metadata responses, and the Store-only set are never returned to the popup, logged, or persisted.
 
-Requests are spaced 2 seconds apart. Community documentation reports a rate limit of approximately 200 requests per five minutes for this undocumented endpoint; Valve does not publish a stable contract or limit. The conservative delay is intended to avoid burst traffic. An HTTP 429 response or the first request-level failure stops the run immediately and reports how many entries were not attempted. A full run for 46 entries takes about 90 seconds. Keep the popup open until it completes.
+Classification is incremental. The popup starts a background job, then polls using short messages. Each poll performs at most one public metadata request, and requests are spaced at least two seconds apart. This avoids one long-lived message/executeScript operation and provides visible progress. Keep the popup open while the job runs. The job state and identifiers exist in memory only; if Firefox unloads the background context, the job is lost and must be started again.
 
+An HTTP 429 response or the first request-level failure stops the run and reports how many entries were not attempted. The UI reports aggregate progress and the failure category, not the AppID or response body.
 A missing Store record, unsuccessful response, missing type field, identity mismatch, or request failure is counted separately; it is never silently classified as a game. The metadata endpoint is undocumented and can change. Its type value is a Store classification, not proof of a user's entitlement type or of library completeness.
 
 Reference for the observed appdetails behavior and rate limit: [InternalSteamWebAPI — Get App Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-App-Details). This is community-maintained documentation, not an official Valve API contract.
@@ -57,7 +58,7 @@ Reference for the observed appdetails behavior and rate limit: [InternalSteamWeb
 - Response bodies, AppID sets, and session material are handled in memory only.
 - AppIDs are normalized to positive safe integers.
 - The comparison popup receives aggregate counts, non-sensitive Store response-shape metadata (top-level keys and owned-package count), cookie metadata (never cookie values), and a selected store identifier.
-- The classification popup receives aggregate counts by Steam-reported type and unresolved-result counts only.
+- The classification popup receives aggregate progress and final aggregate counts by Steam-reported type and unresolved-result counts only.
 - Raw AppID entries, application names, response bodies, cookie values, and session material are never logged or persisted.
 - No requests are sent to any destination other than the two Steam origins.
 - The extension does not create, reload, activate, navigate, or close tabs.
@@ -83,7 +84,7 @@ Comparison:
 
 The user also tested with the Community tab in the default container; it did not work for the selected authenticated container. This confirms the practical requirement that **both origin tabs must be open in the same authenticated Firefox container**. The extension does not move or recreate tabs to satisfy this requirement.
 
-This is a successful reproduction of the earlier manual counts, not proof that either endpoint is complete or that every AppID represents a game. The Store-only metadata classification is the next manual runtime experiment; its results must be recorded separately.
+This is a successful reproduction of the earlier manual counts, not proof that either endpoint is complete or that every AppID represents a game. The Store-only metadata classification remains unvalidated at runtime. The first two attempts failed with Firefox's generic `Could not establish connection. Receiving end does not exist.` message. The implementation has since been changed to incremental background polling; the revised flow requires another manual runtime test.
 
 ## Interpretation
 
