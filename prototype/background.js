@@ -1,5 +1,6 @@
 const STEAM_REQUEST_TIMEOUT_MS = 15000;
 const CLASSIFICATION_METADATA_TIMEOUT_MS = 15000;
+const PROFILE_PAGE_INSPECTION_TIMEOUT_MS = 15000;
 
 const COMMUNITY_ENDPOINT =
   "https://steamcommunity.com/actions/GetOwnedApps/";
@@ -226,6 +227,30 @@ async function getCommunitySessionId(storeId) {
   }
 
   return cookie.value;
+}
+
+async function executeProfilePageInspection(tabId, func) {
+  let timeoutId;
+  const execution = browser.scripting.executeScript({
+    target: { tabId },
+    func
+  });
+  const executionTimeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(
+        "Profile Games page inspection timed out after " +
+        Math.round(PROFILE_PAGE_INSPECTION_TIMEOUT_MS / 1000) + " seconds."
+      )),
+      PROFILE_PAGE_INSPECTION_TIMEOUT_MS
+    );
+  });
+
+  try {
+    // Ignore any late result so a stalled page cannot hold classification setup.
+    return await Promise.race([execution, executionTimeout]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function executeSteamRequest(tabId, endpoint, sessionId = null) {
@@ -568,9 +593,7 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
 
   let pageResults;
   try {
-    pageResults = await browser.scripting.executeScript({
-      target: { tabId: profileTab.id },
-      func: () => {
+    pageResults = await executeProfilePageInspection(profileTab.id, () => {
         const appIds = new Set();
         const add = (value) => {
           if (typeof value !== "string" && typeof value !== "number") return;
@@ -602,8 +625,7 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
           reportedCount,
           renderedGameRowCount: document.querySelectorAll(".gameListRow").length
         };
-      }
-    });
+      });
   } catch {
     return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
   }
@@ -842,9 +864,7 @@ async function startProfileOnlyClassification(confirmedOwnProfile) {
 
   let pageResults;
   try {
-    pageResults = await browser.scripting.executeScript({
-      target: { tabId: profileTab.id },
-      func: () => {
+    pageResults = await executeProfilePageInspection(profileTab.id, () => {
         const ids = new Set();
         const add = (value) => {
           if (typeof value !== "string" && typeof value !== "number") return;
@@ -859,8 +879,7 @@ async function startProfileOnlyClassification(confirmedOwnProfile) {
           if (match) add(match[1]);
         }
         return [...ids];
-      }
-    });
+      });
   } catch {
     return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
   }
@@ -958,9 +977,7 @@ async function startStoreNotProfileClassification(confirmedOwnProfile) {
 
   let pageResults;
   try {
-    pageResults = await browser.scripting.executeScript({
-      target: { tabId: profileTab.id },
-      func: () => {
+    pageResults = await executeProfilePageInspection(profileTab.id, () => {
         const ids = new Set();
         const add = (value) => {
           if (typeof value !== "string" && typeof value !== "number") return;
@@ -975,8 +992,7 @@ async function startStoreNotProfileClassification(confirmedOwnProfile) {
           if (match) add(match[1]);
         }
         return [...ids];
-      }
-    });
+      });
   } catch {
     return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
   }
