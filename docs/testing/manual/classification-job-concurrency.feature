@@ -20,13 +20,14 @@ Feature: Classification job lifecycle in the Firefox popup
     And the final result is displayed when the job completes
 
   @concurrency
-  Scenario: Prevent another classification from starting while a job is active
+  Scenario: Reject a competing start while a classification is active
     Given a classification containing multiple AppIDs is running
     When I inspect the popup controls
     Then the competing classification controls are disabled
     And the package-probe control is disabled
-    When I attempt to start a competing classification through an available UI action
-    Then the existing classification remains the only active job
+    When a second classification-start request is sent to the background handler using the test harness
+    Then the request is rejected with an "already running" response
+    And the existing classification remains the only active job
     And its progress is not reset or replaced
 
   @timeout
