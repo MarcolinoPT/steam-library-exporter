@@ -456,7 +456,27 @@ async function compareSources() {
 }
 
 
-async function compareVisibleProfileGames() {
+function findProfileAllGamesTab(tabs, storeId) {
+  const candidates = tabs.filter((tab) => {
+    if (tab.cookieStoreId !== storeId || typeof tab.url !== "string") {
+      return false;
+    }
+    try {
+      const url = new URL(tab.url);
+      return url.hostname === "steamcommunity.com" &&
+        /^\/(?:id|profiles)\/[^/]+\/games\/?$/.test(url.pathname) &&
+        url.searchParams.get("tab") === "all";
+    } catch {
+      return false;
+    }
+  });
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+async function compareVisibleProfileGames(confirmedOwnProfile) {
+  if (confirmedOwnProfile !== true) {
+    return { ok: false, error: "Confirm that the open profile belongs to your own Steam account before comparing it." };
+  }
   const cookieDiagnostics = await getSafeCookieDiagnostics();
   let selected;
   try {
@@ -476,24 +496,12 @@ async function compareVisibleProfileGames() {
   const storeTab = findExistingSteamTab(
     selected.tabs, selected.storeId, "store.steampowered.com"
   );
-  const profileTab = selected.tabs
-    .filter((tab) => {
-      if (tab.cookieStoreId !== selected.storeId ||
-          typeof tab.url !== "string") return false;
-      try {
-        const url = new URL(tab.url);
-        return url.hostname === "steamcommunity.com" &&
-          /^\/(?:id|profiles)\/[^/]+\/games\/?$/.test(url.pathname);
-      } catch {
-        return false;
-      }
-    })
-    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0] ?? null;
+  const profileTab = findProfileAllGamesTab(selected.tabs, selected.storeId);
 
   if (!communityTab || !storeTab || !profileTab) {
     return {
       ok: false,
-      error: "Open the Steam Community profile Games page, plus Steam Community and Steam Store tabs, in the same authenticated Firefox container. The extension will not open or navigate tabs."
+      error: "Keep exactly one Steam Community profile Games page with tab=all, plus Community and Store source tabs, open in the same authenticated Firefox container. The extension will not open or navigate tabs."
     };
   }
 
@@ -734,7 +742,10 @@ async function startStoreOnlyClassification() {
 }
 
 
-async function startProfileOnlyClassification() {
+async function startProfileOnlyClassification(confirmedOwnProfile) {
+  if (confirmedOwnProfile !== true) {
+    return { ok: false, error: "Confirm that the open profile belongs to your own Steam account before classifying it." };
+  }
   const cookieDiagnostics = await getSafeCookieDiagnostics();
   let selected;
   try {
@@ -745,21 +756,10 @@ async function startProfileOnlyClassification() {
 
   const communityTab = findExistingSteamTab(selected.tabs, selected.storeId, "steamcommunity.com");
   const storeTab = findExistingSteamTab(selected.tabs, selected.storeId, "store.steampowered.com");
-  const profileTab = selected.tabs
-    .filter((tab) => {
-      if (tab.cookieStoreId !== selected.storeId || typeof tab.url !== "string") return false;
-      try {
-        const url = new URL(tab.url);
-        return url.hostname === "steamcommunity.com" &&
-          /^\/(?:id|profiles)\/[^/]+\/games\/?$/.test(url.pathname);
-      } catch {
-        return false;
-      }
-    })
-    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0] ?? null;
+  const profileTab = findProfileAllGamesTab(selected.tabs, selected.storeId);
 
   if (!communityTab || !storeTab || !profileTab) {
-    return { ok: false, error: "Keep the profile Games page and both Steam source tabs open in the same authenticated container. No tabs will be opened or navigated." };
+    return { ok: false, error: "Keep exactly one Steam Community profile Games page with tab=all, plus both source tabs, open in the same authenticated container. No tabs will be opened or navigated." };
   }
 
   let communityPayload;
@@ -847,7 +847,10 @@ async function startProfileOnlyClassification() {
 }
 
 
-async function startStoreNotProfileClassification() {
+async function startStoreNotProfileClassification(confirmedOwnProfile) {
+  if (confirmedOwnProfile !== true) {
+    return { ok: false, error: "Confirm that the open profile belongs to your own Steam account before classifying it." };
+  }
   const cookieDiagnostics = await getSafeCookieDiagnostics();
   let selected;
   try {
@@ -858,18 +861,7 @@ async function startStoreNotProfileClassification() {
 
   const communityTab = findExistingSteamTab(selected.tabs, selected.storeId, "steamcommunity.com");
   const storeTab = findExistingSteamTab(selected.tabs, selected.storeId, "store.steampowered.com");
-  const profileTab = selected.tabs
-    .filter((tab) => {
-      if (tab.cookieStoreId !== selected.storeId || typeof tab.url !== "string") return false;
-      try {
-        const url = new URL(tab.url);
-        return url.hostname === "steamcommunity.com" &&
-          /^\/(?:id|profiles)\/[^/]+\/games\/?$/.test(url.pathname);
-      } catch {
-        return false;
-      }
-    })
-    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0] ?? null;
+  const profileTab = findProfileAllGamesTab(selected.tabs, selected.storeId);
 
   if (!communityTab || !storeTab || !profileTab) {
     return { ok: false, error: "Keep the profile Games page and both Steam source tabs open in the same authenticated container. No tabs will be opened or navigated." };
@@ -1373,7 +1365,7 @@ browser.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "COMPARE_VISIBLE_PROFILE_GAMES") {
-    return compareVisibleProfileGames();
+    return compareVisibleProfileGames(message.confirmedOwnProfile);
   }
 
   if (message.type === "COMPARE_SOURCES") {
@@ -1381,11 +1373,11 @@ browser.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "START_STORE_NOT_PROFILE_CLASSIFICATION") {
-    return startStoreNotProfileClassification();
+    return startStoreNotProfileClassification(message.confirmedOwnProfile);
   }
 
   if (message.type === "START_PROFILE_ONLY_CLASSIFICATION") {
-    return startProfileOnlyClassification();
+    return startProfileOnlyClassification(message.confirmedOwnProfile);
   }
 
   if (message.type === "START_CLASSIFICATION") {

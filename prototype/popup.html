@@ -24,7 +24,12 @@
         open until the run finishes. AppIDs and application names are never
         displayed.
       </p>
-      <button id="profile-compare-button" type="button">
+      <label class="notice" for="confirm-own-profile">
+        <input id="confirm-own-profile" type="checkbox">
+        I confirm the open Steam profile is my own account's profile. The extension
+        cannot independently verify profile ownership.
+      </label>
+      <button id="profile-compare-button" type="button" disabled>
         Compare profile Games page (All Games)
       </button>
       <p id="profile-compare-note" class="notice">
