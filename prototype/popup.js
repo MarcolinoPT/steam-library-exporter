@@ -532,10 +532,24 @@ function appendPackageProbe(result) {
 }
 
 async function resumeActiveClassification() {
-  const current = await browser.runtime.sendMessage({
+  let current = await browser.runtime.sendMessage({
     type: "GET_CLASSIFICATION_STATUS"
   });
-  if (!current || !current.ok || !current.active) return;
+  for (let attempt = 0; current?.preparing && attempt < 60; attempt += 1) {
+    statusElement.textContent =
+      "Waiting for the background classification setup to finish…";
+    await waitForNextPoll(500);
+    current = await browser.runtime.sendMessage({
+      type: "GET_CLASSIFICATION_STATUS"
+    });
+  }
+  if (!current || !current.ok || !current.active) {
+    if (current?.preparing) {
+      statusElement.textContent =
+        "Classification setup is still running in the background. Reopen the popup to resume it.";
+    }
+    return;
+  }
 
   setClassificationControlsDisabled(true);
   compareButton.disabled = true;
