@@ -1047,6 +1047,14 @@ async function pollStoreOnlyClassification(jobId) {
     return getClassificationProgress(job);
   }
 
+  if (job.requestInProgress) {
+    return {
+      ...getClassificationProgress(job),
+      waitingForPacing: true,
+      retryAfterMs: 500
+    };
+  }
+
   const now = Date.now();
   const remainingDelay = 2000 - (now - job.lastRequestAt);
   if (job.lastRequestAt > 0 && remainingDelay > 0) {
@@ -1065,6 +1073,7 @@ async function pollStoreOnlyClassification(jobId) {
   job.attemptedCount += 1;
   job.nextIndex += 1;
   job.lastRequestAt = Date.now();
+  job.requestInProgress = true;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(
@@ -1138,6 +1147,7 @@ async function pollStoreOnlyClassification(jobId) {
     job.done = true;
   } finally {
     clearTimeout(timeoutId);
+    job.requestInProgress = false;
   }
 
   return getClassificationProgress(job);
@@ -1452,6 +1462,9 @@ browser.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "GET_CLASSIFICATION_STATUS") {
+    if (classificationStartInProgress) {
+      return { ok: true, active: false, preparing: true };
+    }
     return activeClassificationJob
       ? { active: true, ...getClassificationProgress(activeClassificationJob) }
       : { ok: true, active: false };
