@@ -25,8 +25,16 @@ Feature: Classification job lifecycle in the Firefox popup
     When I inspect the popup controls
     Then the competing classification controls are disabled
     And the package-probe control is disabled
-    When a second classification-start request is sent to the background handler using the test harness
-    Then the request is rejected with an "already running" response
+    When I open the popup's DevTools console while the first job is still running
+    And I execute the following request:
+      """
+      const response = await browser.runtime.sendMessage({
+        type: "START_CLASSIFICATION"
+      });
+      console.log(response);
+      """
+    Then the response has ok equal to false
+    And the response error contains "already running"
     And the existing classification remains the only active job
     And its progress is not reset or replaced
 
