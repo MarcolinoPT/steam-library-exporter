@@ -58,6 +58,21 @@ Feature: Classification job lifecycle in the Firefox popup
     And it receives a new job identifier
     And the previous job's timeout state does not block the new job
 
+  @preparation
+  Scenario: Reject competing starts and resume after pending source preparation
+    Given no classification job is currently running
+    And a profile-only classification is configured to wait on a controlled profile-page response
+    When I start the profile-only classification in the first popup
+    Then the background status reports that classification setup is preparing
+    When I send a competing START_CLASSIFICATION request from the popup DevTools console
+    Then the request is rejected with an "already running" response
+    When I close the first popup while source preparation is still pending
+    And I reopen the extension popup before releasing the controlled response
+    Then the popup reports that it is waiting for classification setup
+    When I release the controlled response and profile-page inspection succeeds
+    Then the reopened popup discovers the resulting job and resumes polling
+    And no duplicate classification job is created
+
   @setup-failure
   Scenario: Release the classification start reservation when source preparation fails
     Given no classification job is currently running
