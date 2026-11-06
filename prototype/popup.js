@@ -237,7 +237,6 @@ classifyStoreNotProfileButton.addEventListener("click", async () => {
   profileActionInProgress = true;
   syncProfileActionAvailability();
   setClassificationControlsDisabled(true);
-  setClassificationControlsDisabled(true);
   errorElement.hidden = true;
   storeNotProfileClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing sources and preparing Store AppIDs absent from the profile…";
@@ -293,13 +292,13 @@ classifyStoreNotProfileButton.addEventListener("click", async () => {
     profileActionInProgress = false;
     syncProfileActionAvailability();
     setClassificationControlsDisabled(false);
-    setClassificationControlsDisabled(false);
   }
 });
 
 classifyProfileOnlyButton.addEventListener("click", async () => {
   profileActionInProgress = true;
   syncProfileActionAvailability();
+  setClassificationControlsDisabled(true);
   errorElement.hidden = true;
   profileOnlyClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing the three sources and starting metadata checks for profile-only AppIDs…";
@@ -354,6 +353,7 @@ classifyProfileOnlyButton.addEventListener("click", async () => {
   } finally {
     profileActionInProgress = false;
     syncProfileActionAvailability();
+    setClassificationControlsDisabled(false);
   }
 });
 
