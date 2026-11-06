@@ -196,6 +196,7 @@ function appendProfileComparison(result) {
     ["Present in all three sources", result.allThreeOverlapCount],
     ["Profile AppIDs absent from Community", result.profileOnlyCommunityCount],
     ["Profile AppIDs absent from Store", result.profileOnlyStoreCount],
+    ["Profile AppIDs absent from both endpoints", result.profileOnlyBothCount],
     ["Community AppIDs absent from profile page", result.communityNotOnProfileCount],
     ["Store AppIDs absent from profile page", result.storeNotOnProfileCount],
     ["Extracted count matches Steam's displayed count", result.profileExtractionMatchesReportedCount === null
@@ -208,12 +209,11 @@ function appendProfileComparison(result) {
   if (result.storeNotOnProfileCount > 0) {
     classifyStoreNotProfileButton.hidden = false;
   }
-  if (result.profileOnlyCommunityCount > 0 &&
-      result.profileOnlyStoreCount === result.profileOnlyCommunityCount) {
+  if (result.profileOnlyBothCount > 0) {
     classifyProfileOnlyButton.hidden = false;
     classifyProfileOnlyNote.hidden = false;
     classifyProfileOnlyButton.textContent =
-      "Inspect " + result.profileOnlyCommunityCount + " profile-only AppIDs";
+      "Inspect " + result.profileOnlyBothCount + " profile-only AppIDs";
   }
   profileComparisonElement.hidden = false;
   syncProfileActionAvailability();
