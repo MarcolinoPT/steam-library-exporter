@@ -154,7 +154,9 @@ The first successful profile page comparison extracted 326 unique AppIDs, matchi
 
 A prototype action now refreshes both authenticated endpoint responses and re-reads the profile page AppIDs from the existing page DOM. It selects the profile AppIDs absent from both Community and Store, then checks public Store `/api/appdetails/` metadata one ID per request with at least two seconds between requests. It uses the existing incremental in-memory job/polling mechanism. Only aggregate type counts and unresolved/failure counts are returned. The profile page and both source tabs must remain open in the same authenticated container; no tab is opened, scrolled, reloaded, or navigated.
 
-**Interpretation guardrail:** appdetails metadata is not an entitlement check. An unavailable response does not prove an AppID is invalid, delisted, or not a game. Runtime validation of this targeted probe is pending.
+**Interpretation guardrail:** appdetails metadata is not an entitlement check. An unavailable response does not prove an AppID is invalid, delisted, or not a game.
+
+**Runtime validation completed (2026-11-05):** all 14 profile-only AppIDs returned usable public metadata with Steam-reported type `demo`; there were no unavailable results, missing types, identity mismatches, request failures, or unattempted entries. These are account/session-specific catalogue observations, not proof of entitlement.
 
 ## Owned-package relationship probe
 
@@ -172,7 +174,7 @@ The package-details endpoint is undocumented by Valve. Community-maintained docu
 
 **Interpretation guardrail:** a package's catalog app list describes what the package contains; it does not prove that every listed app is individually entitled to the account. A 10-package sample can indicate whether this mapping is useful, but cannot establish coverage of all 329 owned packages or explain all 46 Store-only AppIDs.
 
-**Runtime update:** the initial batched request failed with HTTP 400. The probe has been changed to request one package ID per request, sequentially, with conservative pacing. Runtime validation of this revised approach is pending.
+**Runtime update:** the initial batched request failed with HTTP 400. The revised one-package-per-request probe completed successfully on 2026-11-05: 10 individually paced requests completed, one package returned an app list, and nine were unavailable or had no app list. The sample remains too small and sparse to establish package coverage or reconstruct entitlements.
 
 Reference: [InternalSteamWebAPI — Get Package Details](https://github-wiki-see.page/m/Revadike/InternalSteamWebAPI/wiki/Get-Package-Details).
 
