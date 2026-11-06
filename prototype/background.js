@@ -1,3 +1,6 @@
+const STEAM_REQUEST_TIMEOUT_MS = 15000;
+const CLASSIFICATION_METADATA_TIMEOUT_MS = 15000;
+
 const COMMUNITY_ENDPOINT =
   "https://steamcommunity.com/actions/GetOwnedApps/";
 
@@ -227,10 +230,13 @@ async function getCommunitySessionId(storeId) {
 
 async function executeSteamRequest(tabId, endpoint, sessionId = null) {
   let injectionResults;
+  let executionTimeoutId;
   try {
-    injectionResults = await browser.scripting.executeScript({
+    const execution = browser.scripting.executeScript({
       target: { tabId },
-      func: async (requestUrl, communitySessionId) => {
+      func: async (requestUrl, communitySessionId, timeoutMs) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
           const url = new URL(requestUrl);
           if (communitySessionId) {
@@ -241,7 +247,8 @@ async function executeSteamRequest(tabId, endpoint, sessionId = null) {
             method: "GET",
             credentials: "include",
             cache: "no-store",
-            redirect: "follow"
+            redirect: "follow",
+            signal: controller.signal
           });
 
           const contentType = response.headers.get("content-type") || "";
@@ -273,27 +280,48 @@ async function executeSteamRequest(tabId, endpoint, sessionId = null) {
           let payload;
           try {
             payload = await response.json();
-          } catch {
+          } catch (error) {
             return {
               ok: false,
-              error: "Steam returned malformed JSON."
+              error: error?.name === "AbortError"
+                ? "Steam request timed out after " + Math.round(timeoutMs / 1000) + " seconds."
+                : "Steam returned malformed JSON."
             };
           }
 
           return { ok: true, payload };
-        } catch {
+        } catch (error) {
           return {
             ok: false,
-            error: "The request failed inside the existing Steam tab."
+            error: error?.name === "AbortError"
+              ? "Steam request timed out after " + Math.round(timeoutMs / 1000) + " seconds."
+              : "The request failed inside the existing Steam tab."
           };
+        } finally {
+          clearTimeout(timeoutId);
         }
       },
-      args: [endpoint, sessionId]
+      args: [endpoint, sessionId, STEAM_REQUEST_TIMEOUT_MS]
     });
-  } catch {
+
+    // Bound the extension API call as well as the injected fetch. If execution
+    // completes after this timeout, its result is ignored and cannot install a job.
+    const executionTimeout = new Promise((_, reject) => {
+      executionTimeoutId = setTimeout(
+        () => reject(new Error("Steam request timed out while waiting for Firefox to execute it.")),
+        STEAM_REQUEST_TIMEOUT_MS + 5000
+      );
+    });
+    injectionResults = await Promise.race([execution, executionTimeout]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("timed out")) {
+      throw error;
+    }
     throw new Error(
       "Firefox could not run the request in the existing Steam tab. Confirm the tab is loaded and try again."
     );
+  } finally {
+    clearTimeout(executionTimeoutId);
   }
 
   const mainFrameResult = injectionResults.find(
@@ -634,8 +662,18 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
 
 let activeClassificationJob = null;
 let nextClassificationJobId = 1;
+let classificationStartInProgress = false;
 
 async function startStoreOnlyClassification() {
+  if (classificationStartInProgress ||
+      (activeClassificationJob && !activeClassificationJob.done)) {
+    return {
+      ok: false,
+      error: "A classification job is already running. Let it finish before starting another."
+    };
+  }
+  classificationStartInProgress = true;
+  try {
   const cookieDiagnostics = await getSafeCookieDiagnostics();
 
   let selected;
@@ -739,6 +777,10 @@ async function startStoreOnlyClassification() {
     requestedCount: storeOnlyAppIds.length,
     done: activeClassificationJob.done
   };
+
+  } finally {
+    classificationStartInProgress = false;
+  }
 }
 
 
@@ -746,6 +788,15 @@ async function startProfileOnlyClassification(confirmedOwnProfile) {
   if (confirmedOwnProfile !== true) {
     return { ok: false, error: "Confirm that the open profile belongs to your own Steam account before classifying it." };
   }
+  if (classificationStartInProgress ||
+      (activeClassificationJob && !activeClassificationJob.done)) {
+    return {
+      ok: false,
+      error: "A classification job is already running. Let it finish before starting another."
+    };
+  }
+  classificationStartInProgress = true;
+  try {
   const cookieDiagnostics = await getSafeCookieDiagnostics();
   let selected;
   try {
@@ -844,6 +895,10 @@ async function startProfileOnlyClassification(confirmedOwnProfile) {
   };
 
   return { ok: true, jobId, requestedCount: candidates.length, done: activeClassificationJob.done };
+
+  } finally {
+    classificationStartInProgress = false;
+  }
 }
 
 
@@ -851,6 +906,15 @@ async function startStoreNotProfileClassification(confirmedOwnProfile) {
   if (confirmedOwnProfile !== true) {
     return { ok: false, error: "Confirm that the open profile belongs to your own Steam account before classifying it." };
   }
+  if (classificationStartInProgress ||
+      (activeClassificationJob && !activeClassificationJob.done)) {
+    return {
+      ok: false,
+      error: "A classification job is already running. Let it finish before starting another."
+    };
+  }
+  classificationStartInProgress = true;
+  try {
   const cookieDiagnostics = await getSafeCookieDiagnostics();
   let selected;
   try {
@@ -943,6 +1007,10 @@ async function startStoreNotProfileClassification(confirmedOwnProfile) {
     subject: "store-not-profile"
   };
   return { ok: true, jobId, requestedCount: candidates.length, done: activeClassificationJob.done };
+
+  } finally {
+    classificationStartInProgress = false;
+  }
 }
 
 function getClassificationProgress(job) {
@@ -998,83 +1066,82 @@ async function pollStoreOnlyClassification(jobId) {
   job.nextIndex += 1;
   job.lastRequestAt = Date.now();
 
-  let response;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    CLASSIFICATION_METADATA_TIMEOUT_MS
+  );
+
   try {
-    response = await fetch(url.toString(), {
+    const response = await fetch(url.toString(), {
       method: "GET",
       credentials: "omit",
       cache: "no-store",
-      redirect: "follow"
+      redirect: "follow",
+      signal: controller.signal
     });
-  } catch {
+
+    if (response.status === 429) {
+      job.rateLimited = true;
+      job.requestFailureCount += 1;
+      job.stopReason = "rate-limited";
+      job.done = true;
+      return getClassificationProgress(job);
+    }
+
+    if (!response.ok || response.redirected) {
+      job.requestFailureCount += 1;
+      job.stopReason = "http-error";
+      job.done = true;
+      return getClassificationProgress(job);
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      job.requestFailureCount += 1;
+      job.stopReason = "unexpected-content-type";
+      job.done = true;
+      return getClassificationProgress(job);
+    }
+
+    const payload = await response.json();
+    const entry = payload && typeof payload === "object"
+      ? payload[String(appId)]
+      : null;
+
+    if (!entry || entry.success !== true || !entry.data) {
+      job.unavailableCount += 1;
+    } else if (
+      entry.data.steam_appid !== undefined &&
+      Number(entry.data.steam_appid) !== appId
+    ) {
+      job.identityMismatchCount += 1;
+    } else if (
+      typeof entry.data.type !== "string" ||
+      entry.data.type.trim().length === 0
+    ) {
+      job.missingTypeCount += 1;
+    } else {
+      const type = entry.data.type.trim().toLowerCase().slice(0, 64);
+      job.typeCounts.set(type, (job.typeCounts.get(type) || 0) + 1);
+      job.resolvedCount += 1;
+    }
+
+    if (job.nextIndex >= job.appIds.length) {
+      job.done = true;
+    }
+  } catch (error) {
     job.requestFailureCount += 1;
-    job.stopReason = "network-error";
+    job.stopReason = error?.name === "AbortError"
+      ? "timeout"
+      : "network-error";
     job.done = true;
-    return getClassificationProgress(job);
-  }
-
-  if (response.status === 429) {
-    job.rateLimited = true;
-    job.requestFailureCount += 1;
-    job.stopReason = "rate-limited";
-    job.done = true;
-    return getClassificationProgress(job);
-  }
-
-  if (!response.ok || response.redirected) {
-    job.requestFailureCount += 1;
-    job.stopReason = "http-error";
-    job.done = true;
-    return getClassificationProgress(job);
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    job.requestFailureCount += 1;
-    job.stopReason = "unexpected-content-type";
-    job.done = true;
-    return getClassificationProgress(job);
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    job.requestFailureCount += 1;
-    job.stopReason = "malformed-json";
-    job.done = true;
-    return getClassificationProgress(job);
-  }
-
-  const entry = payload && typeof payload === "object"
-    ? payload[String(appId)]
-    : null;
-
-  if (!entry || entry.success !== true || !entry.data) {
-    job.unavailableCount += 1;
-  } else if (
-    entry.data.steam_appid !== undefined &&
-    Number(entry.data.steam_appid) !== appId
-  ) {
-    job.identityMismatchCount += 1;
-  } else if (
-    typeof entry.data.type !== "string" ||
-    entry.data.type.trim().length === 0
-  ) {
-    job.missingTypeCount += 1;
-  } else {
-    const type = entry.data.type.trim().toLowerCase().slice(0, 64);
-    job.typeCounts.set(type, (job.typeCounts.get(type) || 0) + 1);
-    job.resolvedCount += 1;
-  }
-
-  if (job.nextIndex >= job.appIds.length) {
-    job.done = true;
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   return getClassificationProgress(job);
 }
-
 
 function extractPackageId(entry) {
   if (typeof entry === "number" && Number.isSafeInteger(entry) && entry > 0) {
@@ -1382,6 +1449,12 @@ browser.runtime.onMessage.addListener((message) => {
 
   if (message.type === "START_CLASSIFICATION") {
     return startStoreOnlyClassification();
+  }
+
+  if (message.type === "GET_CLASSIFICATION_STATUS") {
+    return activeClassificationJob
+      ? { active: true, ...getClassificationProgress(activeClassificationJob) }
+      : { ok: true, active: false };
   }
 
   if (message.type === "POLL_CLASSIFICATION") {
