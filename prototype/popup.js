@@ -35,11 +35,13 @@ const METRIC_LABELS = {
   storeInvalidEntryCount: "Invalid Store entries"
 };
 
+let profileActionInProgress = false;
+
 function syncProfileActionAvailability() {
-  const confirmed = confirmOwnProfileInput.checked;
-  profileCompareButton.disabled = !confirmed;
-  classifyProfileOnlyButton.disabled = !confirmed;
-  classifyStoreNotProfileButton.disabled = !confirmed;
+  const available = confirmOwnProfileInput.checked && !profileActionInProgress;
+  profileCompareButton.disabled = !available;
+  classifyProfileOnlyButton.disabled = !available;
+  classifyStoreNotProfileButton.disabled = !available;
 }
 
 confirmOwnProfileInput.addEventListener("change", syncProfileActionAvailability);
@@ -205,25 +207,23 @@ function appendProfileComparison(result) {
   profileComparisonResultsElement.append(note);
   if (result.storeNotOnProfileCount > 0) {
     classifyStoreNotProfileButton.hidden = false;
-    classifyStoreNotProfileButton.disabled = false;
   }
   if (result.profileOnlyCommunityCount > 0 &&
       result.profileOnlyStoreCount === result.profileOnlyCommunityCount) {
     classifyProfileOnlyButton.hidden = false;
-    classifyProfileOnlyButton.disabled = false;
     classifyProfileOnlyNote.hidden = false;
     classifyProfileOnlyButton.textContent =
       "Inspect " + result.profileOnlyCommunityCount + " profile-only AppIDs";
   }
   profileComparisonElement.hidden = false;
+  syncProfileActionAvailability();
 }
 
 
 
 classifyStoreNotProfileButton.addEventListener("click", async () => {
-  classifyStoreNotProfileButton.disabled = true;
-  profileCompareButton.disabled = true;
-  classifyProfileOnlyButton.disabled = true;
+  profileActionInProgress = true;
+  syncProfileActionAvailability();
   errorElement.hidden = true;
   storeNotProfileClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing sources and preparing Store AppIDs absent from the profile…";
@@ -276,14 +276,14 @@ classifyStoreNotProfileButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Store-not-profile classification failed.";
   } finally {
-    classifyStoreNotProfileButton.disabled = false;
+    profileActionInProgress = false;
     syncProfileActionAvailability();
   }
 });
 
 classifyProfileOnlyButton.addEventListener("click", async () => {
-  classifyProfileOnlyButton.disabled = true;
-  profileCompareButton.disabled = true;
+  profileActionInProgress = true;
+  syncProfileActionAvailability();
   errorElement.hidden = true;
   profileOnlyClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing the three sources and starting metadata checks for profile-only AppIDs…";
@@ -336,13 +336,14 @@ classifyProfileOnlyButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Profile-only classification failed.";
   } finally {
-    classifyProfileOnlyButton.disabled = false;
+    profileActionInProgress = false;
     syncProfileActionAvailability();
   }
 });
 
 profileCompareButton.addEventListener("click", async () => {
-  profileCompareButton.disabled = true;
+  profileActionInProgress = true;
+  syncProfileActionAvailability();
   compareButton.disabled = true;
   classifyButton.disabled = true;
   packageProbeButton.disabled = true;
@@ -364,6 +365,7 @@ profileCompareButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Profile page comparison failed.";
   } finally {
+    profileActionInProgress = false;
     syncProfileActionAvailability();
     compareButton.disabled = false;
     classifyButton.disabled = false;
