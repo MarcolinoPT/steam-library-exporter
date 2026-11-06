@@ -1,0 +1,43 @@
+name: Robin (experimental)
+
+on:
+  issue_comment:
+    types: [created]
+
+# This pilot is deliberately maintainer-triggered. It never runs on pull_request
+# events, so secrets are not exposed to untrusted PR code.
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.body == '/robin' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    # Only eligible /robin jobs participate in this concurrency group.
+    # Workflow-level concurrency would also queue ordinary comments and could
+    # replace a pending review run before it starts.
+    concurrency:
+      group: robin-review-pilot
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Review pull request with Robin
+        uses: antongulin/robin@c96f54a4abd07090f37aefa3f9654b489808389c
+        with:
+          llm-api-key: ${{ secrets.LLM_API_KEY }}
+          llm-base-url: ${{ secrets.LLM_BASE_URL }}
+          model: ${{ secrets.LLM_MODEL }}
+          min-command-permission: write
+          # Advisor-only: findings must never block a merge during this experiment.
+          request-changes: "false"
+          # Start with a diff-only review to keep free-model usage predictable.
+          agent-mode: "off"
+          max-diff-size: "50000"
+          max-comments: "10"
+          llm-timeout-ms: "600000"
+          llm-temperature: "0.1"
