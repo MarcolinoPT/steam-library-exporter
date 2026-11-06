@@ -214,6 +214,9 @@ function appendProfileComparison(result) {
     classifyProfileOnlyNote.hidden = false;
     classifyProfileOnlyButton.textContent =
       "Inspect " + result.profileOnlyBothCount + " profile-only AppIDs";
+  } else {
+    classifyProfileOnlyButton.hidden = true;
+    classifyProfileOnlyNote.hidden = true;
   }
   profileComparisonElement.hidden = false;
   syncProfileActionAvailability();
