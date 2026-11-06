@@ -598,7 +598,6 @@ async function resumeActiveClassification() {
   } finally {
     setClassificationControlsDisabled(false);
     compareButton.disabled = false;
-    profileCompareButton.disabled = false;
   }
 }
 
