@@ -36,9 +36,12 @@ const METRIC_LABELS = {
 };
 
 let profileActionInProgress = false;
+let classificationControlsBusy = false;
 
 function syncProfileActionAvailability() {
-  const available = confirmOwnProfileInput.checked && !profileActionInProgress;
+  const available = confirmOwnProfileInput.checked &&
+    !profileActionInProgress &&
+    !classificationControlsBusy;
   profileCompareButton.disabled = !available;
   classifyProfileOnlyButton.disabled = !available;
   classifyStoreNotProfileButton.disabled = !available;
@@ -46,16 +49,13 @@ function syncProfileActionAvailability() {
 
 confirmOwnProfileInput.addEventListener("change", syncProfileActionAvailability);
 syncProfileActionAvailability();
+
 function setClassificationControlsDisabled(disabled) {
+  classificationControlsBusy = disabled;
+  if (compareButton) compareButton.disabled = disabled;
   if (classifyButton) classifyButton.disabled = disabled;
   if (packageProbeButton) packageProbeButton.disabled = disabled;
-  if (disabled) {
-    profileCompareButton.disabled = true;
-    classifyProfileOnlyButton.disabled = true;
-    classifyStoreNotProfileButton.disabled = true;
-  } else {
-    syncProfileActionAvailability();
-  }
+  syncProfileActionAvailability();
 }
 
 
