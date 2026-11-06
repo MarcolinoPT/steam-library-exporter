@@ -626,8 +626,13 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
           renderedGameRowCount: document.querySelectorAll(".gameListRow").length
         };
       });
-  } catch {
-    return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error && error.message.includes("timed out")
+        ? error.message
+        : "Firefox could not inspect the already-open profile Games page."
+    };
   }
 
   const mainFrame = pageResults.find((result) => result.frameId === 0);
@@ -880,8 +885,13 @@ async function startProfileOnlyClassification(confirmedOwnProfile) {
         }
         return [...ids];
       });
-  } catch {
-    return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error && error.message.includes("timed out")
+        ? error.message
+        : "Firefox could not inspect the already-open profile Games page."
+    };
   }
 
   const pageIds = pageResults.find((result) => result.frameId === 0)?.result;
@@ -993,8 +1003,13 @@ async function startStoreNotProfileClassification(confirmedOwnProfile) {
         }
         return [...ids];
       });
-  } catch {
-    return { ok: false, error: "Firefox could not inspect the already-open profile Games page." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error && error.message.includes("timed out")
+        ? error.message
+        : "Firefox could not inspect the already-open profile Games page."
+    };
   }
 
   const pageIds = pageResults.find((result) => result.frameId === 0)?.result;
