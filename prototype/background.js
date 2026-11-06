@@ -592,6 +592,7 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
   let allThree = 0;
   let profileOnlyCommunity = 0;
   let profileOnlyStore = 0;
+  let profileOnlyBoth = 0;
   for (const appId of profileIds) {
     const inCommunity = community.appIds.has(appId);
     const inStore = store.appIds.has(appId);
@@ -600,6 +601,7 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
     if (inCommunity && inStore) allThree += 1;
     if (!inCommunity) profileOnlyCommunity += 1;
     if (!inStore) profileOnlyStore += 1;
+    if (!inCommunity && !inStore) profileOnlyBoth += 1;
   }
 
   let communityNotOnProfile = 0;
@@ -624,6 +626,7 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
     allThreeOverlapCount: allThree,
     profileOnlyCommunityCount: profileOnlyCommunity,
     profileOnlyStoreCount: profileOnlyStore,
+    profileOnlyBothCount: profileOnlyBoth,
     communityNotOnProfileCount: communityNotOnProfile,
     storeNotOnProfileCount: storeNotOnProfile,
     profileExtractionMatchesReportedCount:
