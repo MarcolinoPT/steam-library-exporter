@@ -61,7 +61,7 @@ Feature: Classification job lifecycle in the Firefox popup
   @preparation
   Scenario: Reject competing starts and resume after pending source preparation
     Given no classification job is currently running
-    And a profile-only classification is configured to wait on a controlled profile-page response
+    And the profile-only classification's authenticated Steam Community source request is held pending by a controlled local response
     When I start the profile-only classification in the first popup
     Then the background status reports that classification setup is preparing
     When I send a competing START_CLASSIFICATION request from the popup DevTools console
@@ -69,7 +69,7 @@ Feature: Classification job lifecycle in the Firefox popup
     When I close the first popup while source preparation is still pending
     And I reopen the extension popup before releasing the controlled response
     Then the popup reports that it is waiting for classification setup
-    When I release the controlled response and profile-page inspection succeeds
+    When I release the controlled Steam Community response and profile-page inspection succeeds
     Then the reopened popup discovers the resulting job and resumes polling
     And no duplicate classification job is created
 
