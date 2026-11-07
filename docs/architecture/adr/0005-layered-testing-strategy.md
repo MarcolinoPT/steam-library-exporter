@@ -31,4 +31,4 @@ CI will validate workflow YAML with actionlint and run fast test layers separate
 - Tests must preserve the distinction between successful retrieval and verified completeness, and between catalogue metadata and account observations.
 - Firefox E2E coverage is intentionally small and focused on extension loading, popup/background workflows, classification, and export.
 - Test infrastructure will be introduced with the production source tree rather than retrofitted into temporary prototype files.
-- The implementation sequence and detailed coverage targets are maintained in [Testing strategy](../testing-strategy.md).
+- The implementation sequence and detailed coverage targets are maintained in [Testing strategy](../../testing-strategy.md).
