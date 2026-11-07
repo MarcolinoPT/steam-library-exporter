@@ -35,28 +35,33 @@ const METRIC_LABELS = {
   storeInvalidEntryCount: "Invalid Store entries"
 };
 
-let profileActionInProgress = false;
-let classificationControlsBusy = false;
+let popupActionsBusy = false;
 
 function syncProfileActionAvailability() {
-  const available = confirmOwnProfileInput.checked &&
-    !profileActionInProgress &&
-    !classificationControlsBusy;
+  const available = confirmOwnProfileInput.checked && !popupActionsBusy;
   profileCompareButton.disabled = !available;
   classifyProfileOnlyButton.disabled = !available;
   classifyStoreNotProfileButton.disabled = !available;
 }
 
 confirmOwnProfileInput.addEventListener("change", syncProfileActionAvailability);
-syncProfileActionAvailability();
 
-function setClassificationControlsDisabled(disabled) {
-  classificationControlsBusy = disabled;
-  if (compareButton) compareButton.disabled = disabled;
-  if (classifyButton) classifyButton.disabled = disabled;
-  if (packageProbeButton) packageProbeButton.disabled = disabled;
+function setPopupActionsDisabled(disabled) {
+  popupActionsBusy = disabled;
+  for (const button of [
+    compareButton,
+    classifyButton,
+    profileCompareButton,
+    classifyProfileOnlyButton,
+    classifyStoreNotProfileButton,
+    packageProbeButton
+  ]) {
+    if (button) button.disabled = disabled;
+  }
   syncProfileActionAvailability();
 }
+
+setPopupActionsDisabled(false);
 
 
 function appendDefinitionList(container, values) {
@@ -234,9 +239,7 @@ function appendProfileComparison(result) {
 
 
 classifyStoreNotProfileButton.addEventListener("click", async () => {
-  profileActionInProgress = true;
-  syncProfileActionAvailability();
-  setClassificationControlsDisabled(true);
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   storeNotProfileClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing sources and preparing Store AppIDs absent from the profile…";
@@ -289,16 +292,12 @@ classifyStoreNotProfileButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Store-not-profile classification failed.";
   } finally {
-    profileActionInProgress = false;
-    syncProfileActionAvailability();
-    setClassificationControlsDisabled(false);
+    setPopupActionsDisabled(false);
   }
 });
 
 classifyProfileOnlyButton.addEventListener("click", async () => {
-  profileActionInProgress = true;
-  syncProfileActionAvailability();
-  setClassificationControlsDisabled(true);
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   profileOnlyClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing the three sources and starting metadata checks for profile-only AppIDs…";
@@ -351,18 +350,12 @@ classifyProfileOnlyButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Profile-only classification failed.";
   } finally {
-    profileActionInProgress = false;
-    syncProfileActionAvailability();
-    setClassificationControlsDisabled(false);
+    setPopupActionsDisabled(false);
   }
 });
 
 profileCompareButton.addEventListener("click", async () => {
-  profileActionInProgress = true;
-  syncProfileActionAvailability();
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
-  packageProbeButton.disabled = true;
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   profileComparisonElement.hidden = true;
   statusElement.textContent = "Reading the existing profile Games page and refreshing authenticated sources…";
@@ -381,17 +374,12 @@ profileCompareButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Profile page comparison failed.";
   } finally {
-    profileActionInProgress = false;
-    syncProfileActionAvailability();
-    compareButton.disabled = false;
-    classifyButton.disabled = false;
-    packageProbeButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
 });
 
 compareButton.addEventListener("click", async () => {
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
+  setPopupActionsDisabled(true);
   classifyButton.hidden = true;
   classifyNote.hidden = true;
   packageProbeButton.disabled = true;
@@ -439,12 +427,10 @@ compareButton.addEventListener("click", async () => {
 
       if (result.metrics.storeOnlyCount > 0) {
         classifyButton.hidden = false;
-        classifyButton.disabled = false;
         classifyNote.hidden = false;
       }
       if (result.store.ownedPackagesCount > 0) {
         packageProbeButton.hidden = false;
-        packageProbeButton.disabled = false;
         packageProbeNote.hidden = false;
       }
     } else {
@@ -460,7 +446,7 @@ compareButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Comparison failed.";
   } finally {
-    compareButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
 });
 
@@ -532,6 +518,7 @@ function appendPackageProbe(result) {
 }
 
 async function resumeActiveClassification() {
+  setPopupActionsDisabled(true);
   let current = await browser.runtime.sendMessage({
     type: "GET_CLASSIFICATION_STATUS"
   });
@@ -547,13 +534,13 @@ async function resumeActiveClassification() {
     if (current?.preparing) {
       statusElement.textContent =
         "Classification setup is still running in the background. Reopen the popup to resume it.";
+    } else {
+      setPopupActionsDisabled(false);
     }
     return;
   }
 
-  setClassificationControlsDisabled(true);
-  compareButton.disabled = true;
-  profileCompareButton.disabled = true;
+  setPopupActionsDisabled(true);
   statusElement.textContent =
     "Resuming " + current.subject + " classification: " +
     current.attemptedCount + " of " + current.requestedCount +
@@ -610,15 +597,12 @@ async function resumeActiveClassification() {
     errorElement.hidden = false;
     statusElement.textContent = "Classification recovery failed.";
   } finally {
-    setClassificationControlsDisabled(false);
-    compareButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
 }
 
 packageProbeButton.addEventListener("click", async () => {
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
-  packageProbeButton.disabled = true;
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   packageProbeElement.hidden = true;
   statusElement.textContent =
@@ -651,16 +635,12 @@ packageProbeButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Owned package sample failed.";
   } finally {
-    compareButton.disabled = false;
-    classifyButton.disabled = false;
-    packageProbeButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
 });
 
 classifyButton.addEventListener("click", async () => {
-  setClassificationControlsDisabled(true);
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   classificationElement.hidden = true;
   statusElement.textContent =
@@ -712,8 +692,7 @@ classifyButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Classification failed.";
   } finally {
-    compareButton.disabled = false;
-    setClassificationControlsDisabled(false);
+    setPopupActionsDisabled(false);
   }
 });
 
@@ -724,4 +703,5 @@ resumeActiveClassification().catch((error) => {
     ? error.message
     : "Could not check for an existing classification job.";
   errorElement.hidden = false;
+  setPopupActionsDisabled(false);
 });
