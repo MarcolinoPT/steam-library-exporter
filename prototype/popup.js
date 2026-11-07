@@ -217,6 +217,7 @@ function appendProfileComparison(result) {
   } else {
     classifyProfileOnlyButton.hidden = true;
     classifyProfileOnlyNote.hidden = true;
+    profileOnlyClassificationElement.hidden = true;
   }
   profileComparisonElement.hidden = false;
   syncProfileActionAvailability();
