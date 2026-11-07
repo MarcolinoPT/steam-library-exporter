@@ -38,6 +38,17 @@ Feature: Classification job lifecycle in the Firefox popup
     And the existing classification remains the only active job
     And its progress is not reset or replaced
 
+  @action-serialization
+  Scenario: Prevent profile classification while source comparison is pending
+    Given the authenticated Steam Community source request can be held pending by a controlled local response
+    When I start a source comparison
+    Then the source comparison, profile comparison, classification, and package-probe controls are disabled
+    When I toggle the own-profile confirmation checkbox
+    Then profile comparison and profile classification controls remain disabled
+    When I release the controlled Steam Community response
+    Then the source comparison completes
+    And profile actions become available only if own-profile confirmation is checked
+
   @timeout
   Scenario: Stop a classification when an AppDetails request times out
     Given a classification is ready to request metadata for an AppID
