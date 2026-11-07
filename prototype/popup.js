@@ -382,7 +382,6 @@ compareButton.addEventListener("click", async () => {
   setPopupActionsDisabled(true);
   classifyButton.hidden = true;
   classifyNote.hidden = true;
-  packageProbeButton.disabled = true;
   packageProbeButton.hidden = true;
   packageProbeNote.hidden = true;
   packageProbeElement.hidden = true;
