@@ -35,17 +35,34 @@ const METRIC_LABELS = {
   storeInvalidEntryCount: "Invalid Store entries"
 };
 
-let profileActionInProgress = false;
+let popupActionsBusy = false;
 
 function syncProfileActionAvailability() {
-  const available = confirmOwnProfileInput.checked && !profileActionInProgress;
+  const available = confirmOwnProfileInput.checked && !popupActionsBusy;
   profileCompareButton.disabled = !available;
   classifyProfileOnlyButton.disabled = !available;
   classifyStoreNotProfileButton.disabled = !available;
 }
 
 confirmOwnProfileInput.addEventListener("change", syncProfileActionAvailability);
-syncProfileActionAvailability();
+
+function setPopupActionsDisabled(disabled) {
+  popupActionsBusy = disabled;
+  for (const button of [
+    compareButton,
+    classifyButton,
+    profileCompareButton,
+    classifyProfileOnlyButton,
+    classifyStoreNotProfileButton,
+    packageProbeButton
+  ]) {
+    if (button) button.disabled = disabled;
+  }
+  syncProfileActionAvailability();
+}
+
+setPopupActionsDisabled(false);
+
 
 function appendDefinitionList(container, values) {
   const definitionList = document.createElement("dl");
@@ -222,8 +239,7 @@ function appendProfileComparison(result) {
 
 
 classifyStoreNotProfileButton.addEventListener("click", async () => {
-  profileActionInProgress = true;
-  syncProfileActionAvailability();
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   storeNotProfileClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing sources and preparing Store AppIDs absent from the profile…";
@@ -276,14 +292,12 @@ classifyStoreNotProfileButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Store-not-profile classification failed.";
   } finally {
-    profileActionInProgress = false;
-    syncProfileActionAvailability();
+    setPopupActionsDisabled(false);
   }
 });
 
 classifyProfileOnlyButton.addEventListener("click", async () => {
-  profileActionInProgress = true;
-  syncProfileActionAvailability();
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   profileOnlyClassificationElement.hidden = true;
   statusElement.textContent = "Refreshing the three sources and starting metadata checks for profile-only AppIDs…";
@@ -336,17 +350,12 @@ classifyProfileOnlyButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Profile-only classification failed.";
   } finally {
-    profileActionInProgress = false;
-    syncProfileActionAvailability();
+    setPopupActionsDisabled(false);
   }
 });
 
 profileCompareButton.addEventListener("click", async () => {
-  profileActionInProgress = true;
-  syncProfileActionAvailability();
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
-  packageProbeButton.disabled = true;
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   profileComparisonElement.hidden = true;
   statusElement.textContent = "Reading the existing profile Games page and refreshing authenticated sources…";
@@ -365,20 +374,14 @@ profileCompareButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Profile page comparison failed.";
   } finally {
-    profileActionInProgress = false;
-    syncProfileActionAvailability();
-    compareButton.disabled = false;
-    classifyButton.disabled = false;
-    packageProbeButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
 });
 
 compareButton.addEventListener("click", async () => {
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
+  setPopupActionsDisabled(true);
   classifyButton.hidden = true;
   classifyNote.hidden = true;
-  packageProbeButton.disabled = true;
   packageProbeButton.hidden = true;
   packageProbeNote.hidden = true;
   packageProbeElement.hidden = true;
@@ -423,12 +426,10 @@ compareButton.addEventListener("click", async () => {
 
       if (result.metrics.storeOnlyCount > 0) {
         classifyButton.hidden = false;
-        classifyButton.disabled = false;
         classifyNote.hidden = false;
       }
       if (result.store.ownedPackagesCount > 0) {
         packageProbeButton.hidden = false;
-        packageProbeButton.disabled = false;
         packageProbeNote.hidden = false;
       }
     } else {
@@ -444,7 +445,7 @@ compareButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Comparison failed.";
   } finally {
-    compareButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
 });
 
@@ -515,10 +516,92 @@ function appendPackageProbe(result) {
   packageProbeElement.hidden = false;
 }
 
+async function resumeActiveClassification() {
+  setPopupActionsDisabled(true);
+  let current = await browser.runtime.sendMessage({
+    type: "GET_CLASSIFICATION_STATUS"
+  });
+  for (let attempt = 0; current?.preparing && attempt < 60; attempt += 1) {
+    statusElement.textContent =
+      "Waiting for the background classification setup to finish…";
+    await waitForNextPoll(500);
+    current = await browser.runtime.sendMessage({
+      type: "GET_CLASSIFICATION_STATUS"
+    });
+  }
+  if (!current || !current.ok || !current.active) {
+    if (current?.preparing) {
+      statusElement.textContent =
+        "Classification setup is still running in the background. Reopen the popup to resume it.";
+    } else {
+      setPopupActionsDisabled(false);
+    }
+    return;
+  }
+
+  setPopupActionsDisabled(true);
+  statusElement.textContent =
+    "Resuming " + current.subject + " classification: " +
+    current.attemptedCount + " of " + current.requestedCount +
+    " requests already attempted…";
+
+  try {
+    const result = await runClassificationPolling(
+      current.jobId,
+      current.requestedCount
+    );
+
+    if (current.subject === "store-only") {
+      appendClassification(result);
+    } else {
+      const target = current.subject === "profile-only"
+        ? profileOnlyClassificationResultsElement
+        : storeNotProfileClassificationResultsElement;
+      const section = current.subject === "profile-only"
+        ? profileOnlyClassificationElement
+        : storeNotProfileClassificationElement;
+      target.replaceChildren();
+      const typeEntries = Object.entries(result.typeCounts || {})
+        .sort(([left], [right]) => left.localeCompare(right));
+      appendDefinitionList(target, [
+        ["AppIDs in this classification set", result.requestedCount],
+        ["Metadata requests attempted", result.attemptedCount],
+        ["Successfully classified", result.resolvedCount],
+        ...typeEntries.map(([type, count]) => [
+          "Steam-reported type: " + type,
+          count
+        ]),
+        ["Unavailable / no Store details", result.unavailableCount],
+        ["Missing type field", result.missingTypeCount],
+        ["Identity mismatch", result.identityMismatchCount],
+        ["Request failures", result.requestFailureCount],
+        ...(result.stopReason ? [["Stopped early", result.stopReason]] : []),
+        ["Not attempted", result.notAttemptedCount]
+      ]);
+      const note = document.createElement("p");
+      note.className = "notice";
+      note.textContent =
+        "This result was resumed from an in-memory classification job. Only aggregate counts are displayed.";
+      target.append(note);
+      section.hidden = false;
+    }
+
+    statusElement.textContent = result.stopReason
+      ? "Resumed classification stopped: " + result.stopReason + "."
+      : "Resumed classification completed.";
+  } catch (error) {
+    errorElement.textContent = error instanceof Error
+      ? error.message
+      : "The existing classification could not be resumed.";
+    errorElement.hidden = false;
+    statusElement.textContent = "Classification recovery failed.";
+  } finally {
+    setPopupActionsDisabled(false);
+  }
+}
+
 packageProbeButton.addEventListener("click", async () => {
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
-  packageProbeButton.disabled = true;
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   packageProbeElement.hidden = true;
   statusElement.textContent =
@@ -551,15 +634,12 @@ packageProbeButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Owned package sample failed.";
   } finally {
-    compareButton.disabled = false;
-    classifyButton.disabled = false;
-    packageProbeButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
 });
 
 classifyButton.addEventListener("click", async () => {
-  compareButton.disabled = true;
-  classifyButton.disabled = true;
+  setPopupActionsDisabled(true);
   errorElement.hidden = true;
   classificationElement.hidden = true;
   statusElement.textContent =
@@ -611,7 +691,16 @@ classifyButton.addEventListener("click", async () => {
     errorElement.hidden = false;
     statusElement.textContent = "Classification failed.";
   } finally {
-    compareButton.disabled = false;
-    classifyButton.disabled = false;
+    setPopupActionsDisabled(false);
   }
+});
+
+// A popup may be closed while the background job is still running. On the
+// next open, recover its job ID and continue polling instead of leaving it stuck.
+resumeActiveClassification().catch((error) => {
+  errorElement.textContent = error instanceof Error
+    ? error.message
+    : "Could not check for an existing classification job.";
+  errorElement.hidden = false;
+  setPopupActionsDisabled(false);
 });
