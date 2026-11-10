@@ -1059,6 +1059,14 @@ async function recordClassificationPreparation(startFunction, ...args) {
   try {
     result = await startFunction(...args);
     return result;
+  } catch (error) {
+    result = {
+      ok: false,
+      error: error instanceof Error
+        ? error.message
+        : "Classification setup failed unexpectedly."
+    };
+    throw error;
   } finally {
     if (classificationPreparationSequence !== sequenceBefore) {
       latestClassificationPreparationOutcome = result?.ok === false
