@@ -23,6 +23,17 @@ describe("parseAppId", () => {
     expect(parseAppId(-1)).toEqual({ success: false, reason: "out-of-range" });
   });
 
+  it("parseAppId_MaxSafeInteger_ReturnsCanonicalString", () => {
+    expect(parseAppId(Number.MAX_SAFE_INTEGER)).toEqual({
+      success: true,
+      value: "9007199254740991",
+    });
+    expect(parseAppId("9007199254740991")).toEqual({
+      success: true,
+      value: "9007199254740991",
+    });
+  });
+
   it("parseAppId_UnsafeInteger_ReturnsOutOfRange", () => {
     expect(parseAppId(Number.MAX_SAFE_INTEGER + 1)).toEqual({
       success: false,
@@ -34,8 +45,14 @@ describe("parseAppId", () => {
     });
   });
 
+  it("parseAppId_NaNOrFraction_ReturnsOutOfRange", () => {
+    for (const value of [NaN, 1.5]) {
+      expect(parseAppId(value)).toEqual({ success: false, reason: "out-of-range" });
+    }
+  });
+
   it("parseAppId_NonDigitOrWhitespaceString_ReturnsInvalidFormat", () => {
-    for (const value of ["", " 440", "440 ", "+440", "-440", "44.0", "abc"]) {
+    for (const value of ["", " 440", "440 ", "+440", "-440", "44.0", "abc", "1e3", "0x10", "４４０"]) {
       expect(parseAppId(value)).toEqual({ success: false, reason: "invalid-format" });
     }
   });
@@ -61,6 +78,16 @@ describe("normalizeAppIds", () => {
       invalid: [
         { index: 1, reason: "invalid-format" },
         { index: 2, reason: "out-of-range" },
+      ],
+    });
+  });
+
+  it("normalizeAppIds_InvalidValuesAfterDuplicates_ReportsOriginalIndexes", () => {
+    expect(normalizeAppIds([440, "440", "x", 440, 0])).toEqual({
+      appIds: ["440"],
+      invalid: [
+        { index: 2, reason: "invalid-format" },
+        { index: 4, reason: "out-of-range" },
       ],
     });
   });
