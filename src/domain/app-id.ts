@@ -7,9 +7,11 @@ export type AppId = string;
 
 export type AppIdInput = number | string;
 
+export type InvalidAppIdReason = "invalid-type" | "invalid-format" | "out-of-range";
+
 export type AppIdParseResult =
   | { readonly success: true; readonly value: AppId }
-  | { readonly success: false; readonly reason: "invalid-type" | "invalid-format" | "out-of-range" };
+  | { readonly success: false; readonly reason: InvalidAppIdReason };
 
 /**
  * Parses a numeric or digit-only string AppID without lossy coercion.
@@ -56,7 +58,7 @@ export function parseAppId(input: unknown): AppIdParseResult {
  */
 export function normalizeAppIds(
   inputs: readonly unknown[],
-): { readonly appIds: readonly AppId[]; readonly invalid: readonly { index: number; reason: AppIdParseResult extends infer R ? R extends { success: false; reason: infer E } ? E : never : never }[] } {
+): { readonly appIds: readonly AppId[]; readonly invalid: readonly { index: number; reason: InvalidAppIdReason }[] } {
   const appIds: AppId[] = [];
   const invalid: { index: number; reason: "invalid-type" | "invalid-format" | "out-of-range" }[] = [];
   const seen = new Set<AppId>();
