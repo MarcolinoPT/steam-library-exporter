@@ -1080,7 +1080,7 @@ function extractPackageId(entry) {
   if (typeof entry === "number" && Number.isSafeInteger(entry) && entry > 0) {
     return entry;
   }
-  if (typeof entry === "string" && /^\\d+$/.test(entry)) {
+  if (typeof entry === "string" && /^\d+$/.test(entry)) {
     const value = Number(entry);
     return Number.isSafeInteger(value) && value > 0 ? value : null;
   }
@@ -1091,7 +1091,7 @@ function extractPackageId(entry) {
         candidate > 0) {
       return candidate;
     }
-    if (typeof candidate === "string" && /^\\d+$/.test(candidate)) {
+    if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
       const value = Number(candidate);
       return Number.isSafeInteger(value) && value > 0 ? value : null;
     }
