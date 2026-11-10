@@ -9,6 +9,16 @@ export type AppIdInput = number | string;
 
 export type InvalidAppIdReason = "invalid-type" | "invalid-format" | "out-of-range";
 
+export type InvalidAppIdEntry = {
+  readonly index: number;
+  readonly reason: InvalidAppIdReason;
+};
+
+export type NormalizedAppIds = {
+  readonly appIds: readonly AppId[];
+  readonly invalid: readonly InvalidAppIdEntry[];
+};
+
 export type AppIdParseResult =
   | { readonly success: true; readonly value: AppId }
   | { readonly success: false; readonly reason: InvalidAppIdReason };
@@ -58,9 +68,9 @@ export function parseAppId(input: unknown): AppIdParseResult {
  */
 export function normalizeAppIds(
   inputs: readonly unknown[],
-): { readonly appIds: readonly AppId[]; readonly invalid: readonly { index: number; reason: InvalidAppIdReason }[] } {
+): NormalizedAppIds {
   const appIds: AppId[] = [];
-  const invalid: { index: number; reason: "invalid-type" | "invalid-format" | "out-of-range" }[] = [];
+  const invalid: InvalidAppIdEntry[] = [];
   const seen = new Set<AppId>();
 
   inputs.forEach((input, index) => {
