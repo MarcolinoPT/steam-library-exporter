@@ -532,7 +532,10 @@ async function resumeActiveClassification() {
     });
   }
   if (!current || !current.ok || !current.active) {
-    if (observedPreparation) {
+    if (current?.preparationFailed) {
+      statusElement.textContent =
+        "Classification setup failed: " + current.error;
+    } else if (observedPreparation) {
       statusElement.textContent =
         "Classification setup ended without starting a job. You can try again.";
     }
