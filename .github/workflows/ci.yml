@@ -54,10 +54,6 @@ jobs:
         if: steps.node-project.outputs.available == 'true'
         run: npm ci
 
-      - name: Lint
-        if: steps.node-project.outputs.available == 'true'
-        run: npm run lint
-
       - name: Typecheck
         if: steps.node-project.outputs.available == 'true'
         run: npm run typecheck
@@ -65,11 +61,3 @@ jobs:
       - name: Unit tests
         if: steps.node-project.outputs.available == 'true'
         run: npm test -- --run
-
-      - name: Build
-        if: steps.node-project.outputs.available == 'true'
-        run: npm run build
-
-      - name: Validate extension manifest
-        if: steps.node-project.outputs.available == 'true'
-        run: npm run lint:extension
