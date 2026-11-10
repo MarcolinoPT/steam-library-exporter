@@ -690,6 +690,8 @@ async function compareVisibleProfileGames(confirmedOwnProfile) {
 let activeClassificationJob = null;
 let nextClassificationJobId = 1;
 let classificationStartInProgress = false;
+let classificationPreparationSequence = 0;
+let latestClassificationPreparationOutcome = null;
 
 async function startStoreOnlyClassification() {
   if (classificationStartInProgress ||
@@ -700,6 +702,8 @@ async function startStoreOnlyClassification() {
     };
   }
   classificationStartInProgress = true;
+  classificationPreparationSequence += 1;
+  latestClassificationPreparationOutcome = null;
   try {
   const cookieDiagnostics = await getSafeCookieDiagnostics();
 
@@ -823,6 +827,8 @@ async function startProfileOnlyClassification(confirmedOwnProfile) {
     };
   }
   classificationStartInProgress = true;
+  classificationPreparationSequence += 1;
+  latestClassificationPreparationOutcome = null;
   try {
   const cookieDiagnostics = await getSafeCookieDiagnostics();
   let selected;
@@ -943,6 +949,8 @@ async function startStoreNotProfileClassification(confirmedOwnProfile) {
     };
   }
   classificationStartInProgress = true;
+  classificationPreparationSequence += 1;
+  latestClassificationPreparationOutcome = null;
   try {
   const cookieDiagnostics = await getSafeCookieDiagnostics();
   let selected;
@@ -1041,6 +1049,27 @@ async function startStoreNotProfileClassification(confirmedOwnProfile) {
 
   } finally {
     classificationStartInProgress = false;
+  }
+}
+
+
+async function recordClassificationPreparation(startFunction, ...args) {
+  const sequenceBefore = classificationPreparationSequence;
+  let result;
+  try {
+    result = await startFunction(...args);
+    return result;
+  } finally {
+    if (classificationPreparationSequence !== sequenceBefore) {
+      latestClassificationPreparationOutcome = result?.ok === false
+        ? {
+            ok: false,
+            active: false,
+            preparationFailed: true,
+            error: result.error || "Classification setup failed."
+          }
+        : null;
+    }
   }
 }
 
@@ -1481,20 +1510,29 @@ browser.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "START_STORE_NOT_PROFILE_CLASSIFICATION") {
-    return startStoreNotProfileClassification(message.confirmedOwnProfile);
+    return recordClassificationPreparation(
+      startStoreNotProfileClassification,
+      message.confirmedOwnProfile
+    );
   }
 
   if (message.type === "START_PROFILE_ONLY_CLASSIFICATION") {
-    return startProfileOnlyClassification(message.confirmedOwnProfile);
+    return recordClassificationPreparation(
+      startProfileOnlyClassification,
+      message.confirmedOwnProfile
+    );
   }
 
   if (message.type === "START_CLASSIFICATION") {
-    return startStoreOnlyClassification();
+    return recordClassificationPreparation(startStoreOnlyClassification);
   }
 
   if (message.type === "GET_CLASSIFICATION_STATUS") {
     if (classificationStartInProgress) {
       return { ok: true, active: false, preparing: true };
+    }
+    if (latestClassificationPreparationOutcome) {
+      return { ...latestClassificationPreparationOutcome };
     }
     return activeClassificationJob
       ? { active: true, ...getClassificationProgress(activeClassificationJob) }
