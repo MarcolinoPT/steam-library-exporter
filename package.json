@@ -5,11 +5,8 @@
   "type": "module",
   "description": "Firefox-first extension for exporting Steam game libraries.",
   "scripts": {
-    "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest",
-    "build": "tsc --noEmit",
-    "lint:extension": "node -e \"console.log('Extension manifest validation is deferred until the production Firefox build is introduced.')\""
+    "test": "vitest"
   },
   "devDependencies": {
     "typescript": "5.8.3",
