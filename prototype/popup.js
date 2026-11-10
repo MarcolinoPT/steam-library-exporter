@@ -521,7 +521,7 @@ async function resumeActiveClassification() {
   let current = await browser.runtime.sendMessage({
     type: "GET_CLASSIFICATION_STATUS"
   });
-  for (let attempt = 0; current?.preparing && attempt < 60; attempt += 1) {
+  while (current?.preparing) {
     statusElement.textContent =
       "Waiting for the background classification setup to finish…";
     await waitForNextPoll(500);
@@ -530,12 +530,7 @@ async function resumeActiveClassification() {
     });
   }
   if (!current || !current.ok || !current.active) {
-    if (current?.preparing) {
-      statusElement.textContent =
-        "Classification setup is still running in the background. Reopen the popup to resume it.";
-    } else {
-      setPopupActionsDisabled(false);
-    }
+    setPopupActionsDisabled(false);
     return;
   }
 
