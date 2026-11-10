@@ -97,6 +97,19 @@ Feature: Classification job lifecycle in the Firefox popup
     When I restore the Steam source response and start the classification again
     Then the new classification start is accepted
 
+  @stale-previous-job
+  Scenario: Report a failed new preparation instead of resuming an older completed job
+    Given a previous classification has completed and its results remain in background memory
+    And the next classification's source preparation is held pending by a controlled local response
+    And that source preparation will fail when the response is released
+    When I start a new classification
+    And I close the popup while the new preparation is pending
+    And I release the controlled response so preparation fails
+    And I reopen the extension popup
+    Then the popup reports the new preparation failure
+    And it does not display the previous classification's aggregates as a resumed result
+    And the popup controls are enabled so I can retry
+
   @privacy
   Scenario: Display aggregate classification results without persisting library data
     Given a classification has completed
