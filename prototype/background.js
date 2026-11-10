@@ -1536,15 +1536,19 @@ browser.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "GET_CLASSIFICATION_STATUS") {
+    let status;
     if (classificationStartInProgress) {
-      return { ok: true, active: false, preparing: true };
+      status = { ok: true, active: false, preparing: true };
+    } else if (latestClassificationPreparationOutcome) {
+      status = { ...latestClassificationPreparationOutcome };
+    } else {
+      status = activeClassificationJob
+        ? { active: true, ...getClassificationProgress(activeClassificationJob) }
+        : { ok: true, active: false };
     }
-    if (latestClassificationPreparationOutcome) {
-      return { ...latestClassificationPreparationOutcome };
-    }
-    return activeClassificationJob
-      ? { active: true, ...getClassificationProgress(activeClassificationJob) }
-      : { ok: true, active: false };
+
+    // Firefox runtime messaging requires a Promise (or sendResponse) for responses.
+    return Promise.resolve(status);
   }
 
   if (message.type === "POLL_CLASSIFICATION") {
