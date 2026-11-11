@@ -94,5 +94,6 @@ These instructions apply to the entire repository. Follow any more specific `AGE
 - Keep PRs small enough to review as vertical slices. Explain the user-visible or architectural outcome, scope boundaries, validation, and known limitations.
 - Keep the branch current with its target when needed, and verify the final diff rather than relying on the PR title or description.
 - Address valid security, privacy, correctness, lifecycle, recovery, and timeout findings before merge. Verify each finding against the current code and tests; do not dismiss it solely because an automated reviewer raised it.
+- For an AI finding rejected because no code change is needed, record the rationale in its review thread; a human maintainer may then resolve that thread. Keep all other threads in the existing review and reassessment process.
 - AI reviews are advisory and do not replace human review. A missing, skipped, or still-processing AI review is not approval.
 - Do not approve or merge automatically. CI must pass and the change must receive the required human review before merge.
