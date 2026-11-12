@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { normalizeAppIds, parseAppId } from "../../src/domain/app-id.js";
 
 describe("parseAppId", () => {
@@ -43,6 +43,25 @@ describe("parseAppId", () => {
       success: false,
       reason: "out-of-range",
     });
+  });
+
+  it("parseAppId_OverlongDigitString_ReturnsOutOfRangeBeforeBigIntConversion", () => {
+    const originalBigInt = globalThis.BigInt;
+    vi.stubGlobal(
+      "BigInt",
+      (() => {
+        throw new Error("BigInt should not parse an overlong AppID");
+      }) as unknown as typeof BigInt,
+    );
+
+    try {
+      expect(parseAppId("10000000000000000")).toEqual({
+        success: false,
+        reason: "out-of-range",
+      });
+    } finally {
+      vi.stubGlobal("BigInt", originalBigInt);
+    }
   });
 
   it("parseAppId_NaNOrFraction_ReturnsOutOfRange", () => {
@@ -94,5 +113,12 @@ describe("normalizeAppIds", () => {
 
   it("normalizeAppIds_EmptyInput_ReturnsEmptyResult", () => {
     expect(normalizeAppIds([])).toEqual({ appIds: [], invalid: [] });
+  });
+
+  it("normalizeAppIds_SparseInput_ReportsMissingEntryAsInvalid", () => {
+    expect(normalizeAppIds([440, , 570])).toEqual({
+      appIds: ["440", "570"],
+      invalid: [{ index: 1, reason: "invalid-type" }],
+    });
   });
 });
