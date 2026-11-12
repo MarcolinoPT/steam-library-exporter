@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Review pull request with Robin
-        uses: antongulin/robin@c96f54a4abd07090f37aefa3f9654b489808389c
+        uses: antongulin/robin@c307d49e53284c3c0e05c9a764ab9e8cce6f7dff
         with:
           llm-api-key: ${{ secrets.LLM_API_KEY }}
           llm-base-url: ${{ secrets.LLM_BASE_URL }}
