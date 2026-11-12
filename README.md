@@ -6,7 +6,7 @@ The primary use case is exporting the signed-in user's own library, including li
 
 ## Project status
 
-Early investigation / prototype planning. Steam's authenticated endpoints are not yet treated as stable or complete APIs.
+Early investigation and production foundations. Steam's authenticated endpoints are not yet treated as stable or complete APIs. The executable code under `prototype/` remains temporary diagnostic tooling while the production implementation is developed separately.
 
 ## Goals
 
@@ -19,15 +19,15 @@ Early investigation / prototype planning. Steam's authenticated endpoints are no
 
 ## Development
 
-Requirements: Node.js LTS and npm.
+Requirements: Node.js 22 and npm.
 
 ```sh
 npm ci
-npm run lint
 npm run typecheck
-npm test
-npm run build
+npm test -- --run
 ```
+
+The production TypeScript domain code is being introduced incrementally. Firefox build and manifest validation commands will be added when the production extension build exists.
 
 ## Security and privacy
 

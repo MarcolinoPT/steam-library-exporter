@@ -1,0 +1,15 @@
+{
+  "name": "steam-library-exporter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Firefox-first extension for exporting Steam game libraries.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "vitest": "3.2.7"
+  }
+}
