@@ -52,7 +52,10 @@ export function parseAppId(input: unknown): AppIdParseResult {
   }
 
   // BigInt avoids precision loss while checking digit-string input.
-  if (BigInt(normalized) > BigInt(Number.MAX_SAFE_INTEGER)) {
+  if (
+    normalized.length > String(Number.MAX_SAFE_INTEGER).length ||
+    BigInt(normalized) > BigInt(Number.MAX_SAFE_INTEGER)
+  ) {
     return { success: false, reason: "out-of-range" };
   }
 
@@ -73,18 +76,18 @@ export function normalizeAppIds(
   const invalid: InvalidAppIdEntry[] = [];
   const seen = new Set<AppId>();
 
-  inputs.forEach((input, index) => {
-    const result = parseAppId(input);
+  for (let index = 0; index < inputs.length; index += 1) {
+    const result = parseAppId(inputs[index]);
     if (!result.success) {
       invalid.push({ index, reason: result.reason });
-      return;
+      continue;
     }
 
     if (!seen.has(result.value)) {
       seen.add(result.value);
       appIds.push(result.value);
     }
-  });
+  }
 
   return { appIds, invalid };
 }
